@@ -1,0 +1,232 @@
+"""Market-data provider adapters.
+
+Primary source is Yahoo Finance: keyless, broadly reachable (works where
+crypto-exchange APIs are firewalled), and covers BOTH crypto (BTC-USD) and
+equities (AAPL). Per-symbol we try providers in order and the first that
+returns data wins:
+
+    crypto  -> [Yahoo, CCXT(multi-exchange)]
+    equity  -> [Yahoo, Alpaca?, Polygon?]   (broker providers only if keyed)
+
+Normalized shapes:
+    quote -> {symbol, provider, price, ...}
+    bars  -> {symbol, provider, timeframe, limit, bars: [{t,o,h,l,c,v}, ...]}
+"""
+
+from __future__ import annotations
+
+from typing import Protocol
+
+import httpx
+
+from app.config import settings
+
+_UA = {"User-Agent": "Mozilla/5.0 (compatible; AgenticTradingTerminal/0.1)"}
+
+
+class DataProvider(Protocol):
+    async def get_quote(self, symbol: str) -> dict: ...
+    async def get_bars(self, symbol: str, timeframe: str, limit: int) -> dict: ...
+
+
+# ── Yahoo Finance (keyless; crypto + equities) ──────────────────────────
+
+# timeframe -> (yahoo interval, range covering ~120+ bars)
+_YF = {"1m": ("1m", "5d"), "5m": ("5m", "1mo"), "1h": ("1h", "3mo"),
+       "1H": ("1h", "3mo"), "1d": ("1d", "1y"), "1D": ("1d", "1y")}
+
+
+class YahooProvider:
+    name = "yahoo"
+    BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
+
+    @staticmethod
+    def _sym(symbol: str) -> str:
+        # crypto pairs -> Yahoo dash form (BTC/USD -> BTC-USD); equities unchanged
+        return symbol.replace("/", "-").upper() if "/" in symbol else symbol
+
+    async def _chart(self, symbol: str, interval: str, rng: str) -> dict:
+        url = f"{self.BASE}/{self._sym(symbol)}"
+        params = {"interval": interval, "range": rng}
+        async with httpx.AsyncClient(timeout=12, headers=_UA) as c:
+            r = await c.get(url, params=params)
+            r.raise_for_status()
+            return r.json()["chart"]["result"][0]
+
+    async def get_quote(self, symbol: str) -> dict:
+        res = await self._chart(symbol, "1d", "5d")
+        meta = res.get("meta", {})
+        return {"symbol": symbol, "provider": self.name,
+                "price": meta.get("regularMarketPrice"),
+                "pct_change": None}
+
+    async def get_bars(self, symbol: str, timeframe: str = "1D", limit: int = 100) -> dict:
+        interval, rng = _YF.get(timeframe, ("1d", "1y"))
+        res = await self._chart(symbol, interval, rng)
+        ts = res.get("timestamp", []) or []
+        q = (res.get("indicators", {}).get("quote", [{}]) or [{}])[0]
+        o, h, l, c, v = (q.get(k, []) for k in ("open", "high", "low", "close", "volume"))
+        bars = []
+        for i, t in enumerate(ts):
+            if c[i] is None:
+                continue
+            bars.append({"t": t * 1000, "o": o[i], "h": h[i], "l": l[i],
+                         "c": c[i], "v": v[i] or 0})
+        bars = bars[-limit:]
+        return {"symbol": symbol, "provider": self.name, "timeframe": timeframe,
+                "limit": limit, "bars": bars}
+
+
+# ── Crypto fallback (CCXT, multi-exchange) ──────────────────────────────
+
+_CCXT_TF = {"1m": "1m", "5m": "5m", "1h": "1h", "1H": "1h", "1d": "1d", "1D": "1d"}
+_CRYPTO_EXCHANGES = ["coinbase", "kraken", "bitstamp"]
+_WORKING_EXCHANGE: str | None = None
+
+
+class CCXTProvider:
+    name = "ccxt"
+
+    @staticmethod
+    def _normalize(symbol: str) -> str:
+        return symbol.replace("-", "/").upper()
+
+    async def _run(self, fn_name: str, *args):
+        global _WORKING_EXCHANGE
+        import ccxt.async_support as ccxt
+        order = ([_WORKING_EXCHANGE] if _WORKING_EXCHANGE else []) + [
+            e for e in _CRYPTO_EXCHANGES if e != _WORKING_EXCHANGE]
+        last_err: Exception | None = None
+        for ex_id in order:
+            ex = getattr(ccxt, ex_id)()
+            try:
+                result = await getattr(ex, fn_name)(*args)
+                _WORKING_EXCHANGE = ex_id
+                return ex_id, result
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+            finally:
+                await ex.close()
+        raise RuntimeError(f"all crypto exchanges unreachable; last error: {last_err}")
+
+    async def get_quote(self, symbol: str) -> dict:
+        ex_id, t = await self._run("fetch_ticker", self._normalize(symbol))
+        return {"symbol": symbol, "provider": f"ccxt:{ex_id}", "price": t.get("last"),
+                "bid": t.get("bid"), "ask": t.get("ask"), "pct_change": t.get("percentage")}
+
+    async def get_bars(self, symbol: str, timeframe: str = "1D", limit: int = 100) -> dict:
+        tf = _CCXT_TF.get(timeframe, "1d")
+        ex_id, raw = await self._run("fetch_ohlcv", self._normalize(symbol), tf, None, limit)
+        bars = [{"t": r[0], "o": r[1], "h": r[2], "l": r[3], "c": r[4], "v": r[5]} for r in raw]
+        return {"symbol": symbol, "provider": f"ccxt:{ex_id}", "timeframe": timeframe,
+                "limit": limit, "bars": bars}
+
+
+# ── Equities (Alpaca) ───────────────────────────────────────────────────
+
+_ALPACA_TF = {"1m": "1Min", "5m": "5Min", "1h": "1Hour", "1H": "1Hour",
+              "1d": "1Day", "1D": "1Day"}
+
+
+class AlpacaProvider:
+    name = "alpaca"
+    DATA = "https://data.alpaca.markets/v2"
+
+    def _headers(self) -> dict:
+        return {"APCA-API-KEY-ID": settings.alpaca_api_key or "",
+                "APCA-API-SECRET-KEY": settings.alpaca_api_secret or ""}
+
+    async def get_quote(self, symbol: str) -> dict:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.get(f"{self.DATA}/stocks/{symbol}/quotes/latest", headers=self._headers())
+            r.raise_for_status()
+            q = r.json().get("quote", {})
+        return {"symbol": symbol, "provider": self.name, "price": q.get("ap") or q.get("bp"),
+                "bid": q.get("bp"), "ask": q.get("ap")}
+
+    async def get_bars(self, symbol: str, timeframe: str = "1D", limit: int = 100) -> dict:
+        params = {"timeframe": _ALPACA_TF.get(timeframe, "1Day"), "limit": limit}
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get(f"{self.DATA}/stocks/{symbol}/bars", headers=self._headers(), params=params)
+            r.raise_for_status()
+            raw = r.json().get("bars", [])
+        bars = [{"t": b["t"], "o": b["o"], "h": b["h"], "l": b["l"], "c": b["c"], "v": b["v"]}
+                for b in raw]
+        return {"symbol": symbol, "provider": self.name, "timeframe": timeframe,
+                "limit": limit, "bars": bars}
+
+
+# ── Equities / options (Polygon) ────────────────────────────────────────
+
+_POLY_TF = {"1m": (1, "minute"), "5m": (5, "minute"), "1h": (1, "hour"),
+            "1H": (1, "hour"), "1d": (1, "day"), "1D": (1, "day")}
+
+
+class PolygonProvider:
+    name = "polygon"
+    BASE = "https://api.polygon.io"
+
+    async def get_quote(self, symbol: str) -> dict:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.get(f"{self.BASE}/v2/aggs/ticker/{symbol}/prev",
+                            params={"apiKey": settings.polygon_api_key})
+            r.raise_for_status()
+            res = r.json().get("results", [])
+        return {"symbol": symbol, "provider": self.name, "price": res[0]["c"] if res else None}
+
+    async def get_bars(self, symbol: str, timeframe: str = "1D", limit: int = 100) -> dict:
+        mult, span = _POLY_TF.get(timeframe, (1, "day"))
+        url = f"{self.BASE}/v2/aggs/ticker/{symbol}/range/{mult}/{span}/2024-01-01/2030-01-01"
+        params = {"limit": limit, "sort": "desc", "apiKey": settings.polygon_api_key}
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.get(url, params=params)
+            r.raise_for_status()
+            raw = r.json().get("results", [])
+        bars = [{"t": b["t"], "o": b["o"], "h": b["h"], "l": b["l"], "c": b["c"], "v": b["v"]}
+                for b in raw]
+        return {"symbol": symbol, "provider": self.name, "timeframe": timeframe,
+                "limit": limit, "bars": bars}
+
+
+# ── Fallback wrapper ────────────────────────────────────────────────────
+
+
+class FallbackProvider:
+    """Try each provider in order; first success wins."""
+
+    def __init__(self, providers: list[DataProvider]):
+        self._providers = providers
+        self.name = "+".join(getattr(p, "name", "?") for p in providers)
+
+    async def _try(self, method: str, symbol: str, *args):
+        last_err: Exception | None = None
+        for p in self._providers:
+            try:
+                return await getattr(p, method)(symbol, *args)
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+        raise RuntimeError(f"all data providers failed; last error: {last_err}")
+
+    async def get_quote(self, symbol: str) -> dict:
+        return await self._try("get_quote", symbol)
+
+    async def get_bars(self, symbol: str, timeframe: str = "1D", limit: int = 100) -> dict:
+        return await self._try("get_bars", symbol, timeframe, limit)
+
+
+# ── Routing ─────────────────────────────────────────────────────────────
+
+
+def _is_crypto(symbol: str) -> bool:
+    return "/" in symbol or "-" in symbol
+
+
+def get_provider(symbol: str) -> DataProvider:
+    if _is_crypto(symbol):
+        return FallbackProvider([YahooProvider(), CCXTProvider()])
+    chain: list[DataProvider] = [YahooProvider()]
+    if settings.alpaca_api_key and settings.alpaca_api_secret:
+        chain.append(AlpacaProvider())
+    if settings.polygon_api_key:
+        chain.append(PolygonProvider())
+    return FallbackProvider(chain)

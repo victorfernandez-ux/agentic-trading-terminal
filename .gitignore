@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Node / Next
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# Data / logs (root-level data dir only — NOT backend/app/data/)
+*.log
+*.sqlite
+/data/
+audit_logs/
+pytest-cache-files-*/
+nohup.out
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+.private/
+
+# SQLite dev DB
+*.db
+terminal.db

@@ -1,0 +1,34 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    container_name: att_db
+    environment:
+      POSTGRES_USER: trader
+      POSTGRES_PASSWORD: trader
+      POSTGRES_DB: terminal
+    ports:
+      - "5432:5432"
+    volumes:
+      - att_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trader -d terminal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: att_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - att_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  att_pgdata:
+  att_redisdata:
