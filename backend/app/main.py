@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import agents, audit, health, market, orders, stream
+from app.api import agents, analytics, audit, health, market, orders, stream
 from app.config import settings
 from app.core.db import init_db
 
@@ -33,6 +33,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(market.router)
+app.include_router(analytics.router)
 app.include_router(agents.router)
 app.include_router(orders.router)
 app.include_router(audit.router)

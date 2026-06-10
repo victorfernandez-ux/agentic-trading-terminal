@@ -7,7 +7,9 @@ AI agents research and prepare trades for crypto and US equities; **a human appr
 **[HANDOFF.md](./HANDOFF.md)** for current status, decisions, and known issues.
 
 **Status:** MVP shipped (Phases 0–3 of the roadmap: data, UI, agent loop, execution + approval + audit), plus
-Phase 1's live streaming. `/health` reports `build: phase3`. Next up: Phase 4 (options + backtesting).
+Phase 1's live streaming and a five-module **analytics suite** (indicators/signal, risk metrics, backtesting,
+DCF valuation, investor personas — capabilities inspired by FinceptTerminal's feature set, implemented from
+scratch). `/health` reports `build: phase3`. Next up: rest of Phase 4 (options via Tradier, QuantLib Greeks).
 
 > Paper-trading only. No autonomous money movement. Every order is human-approved. State persists to a local
 > SQLite DB (or Postgres if configured).
@@ -41,11 +43,20 @@ npm run dev
 4. Positions & P&L → the filled position appears with live unrealized P&L.
 5. Every decision is persisted to the audit log: `GET /audit` to query,
    `GET /audit/replay/{run_id}` to replay one agent run end-to-end.
+6. Analytics panel (bottom) → five tabs for the selected symbol:
+   **Signal** (SMA/EMA/RSI/MACD/Bollinger/ATR + composite vote), **Risk** (Sharpe, Sortino, VaR/CVaR,
+   max drawdown, beta/alpha vs SPY), **Backtest** (SMA cross · RSI reversion · buy-hold, fee-aware,
+   no-lookahead), **DCF** (fair value + WACC×growth sensitivity), **Personas** (Buffett, Graham, Lynch,
+   Munger, Marks — rule-based scoring + consensus). Same engines power the agent tools
+   (`get_indicators`, `get_risk_metrics`, `run_backtest`, `consult_personas`), so the research agent
+   cites the technical signal as evidence in its thesis.
 
 ## Test
 
-From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (28 passing: health, approval gate +
-double-approve race, persistence, audit log + replay, order-sizing notional cap, WebSocket streaming)
+From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (78 passing: health, approval gate +
+double-approve race, persistence, audit log + replay, order-sizing notional cap, WebSocket streaming,
+and the analytics suite — indicator math, risk metrics, backtester no-lookahead/fees, DCF closed-form
+checks, persona scoring, /analytics endpoints over a fake provider)
 
 ## Layout
 
@@ -54,7 +65,7 @@ PROJECT_PLAN.md   vision · architecture · tooling research · roadmap
 HANDOFF.md        status · decisions · known issues · next steps
 docker-compose.yml  Postgres + Redis (optional; SQLite is the default)
 backend/          FastAPI + LangGraph agents + data providers + DB
-  app/  main · config · core(db,audit) · data/providers · agents · execution · api
+  app/  main · config · core(db,audit) · data/providers · agents · analytics · execution · api
   run-dev.ps1     reliable dev launcher (.venv-scoped)
 frontend/         Next.js terminal UI (watchlist · chart · agent console · approval · positions)
 ```

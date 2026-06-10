@@ -1,6 +1,11 @@
 # Agentic Trading Terminal — Handoff / Status
 
-**As of:** June 10, 2026 · **Status:** MVP loop complete (Phases 0–3) + Positions/P&L + DB persistence.
+**As of:** June 10, 2026 · **Status:** MVP loop complete (Phases 0–3) + Positions/P&L + DB persistence +
+analytics suite (v1.2): indicators/signal, risk metrics, backtesting engine, DCF valuation, investor-persona
+agents — five capabilities adapted from FinceptTerminal's feature set (github.com/Fincept-Corporation/FinceptTerminal),
+implemented from scratch in `backend/app/analytics/` (FinceptTerminal is AGPL-3.0; no code was copied).
+Exposed as `/analytics/*` endpoints, agent tools in `app/agents/tools.py`, and the frontend Analytics panel.
+The research agent now attaches the composite technical signal to its market evidence. Backend tests: 78.
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---

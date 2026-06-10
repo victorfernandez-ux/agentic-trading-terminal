@@ -6,6 +6,7 @@ import AgentConsole from "@/components/AgentConsole";
 import ApprovalQueue from "@/components/ApprovalQueue";
 import Positions from "@/components/Positions";
 import Watchlist, { type Quote } from "@/components/Watchlist";
+import Analytics from "@/components/Analytics";
 
 type Health = { status: string; trading_mode: string; require_human_approval: boolean };
 
@@ -52,8 +53,8 @@ export default function Terminal() {
         style={{
           display: "grid",
           gridTemplateColumns: "200px 1.3fr 340px",
-          gridTemplateRows: "minmax(320px, auto) auto",
-          gridTemplateAreas: `"watch chart approval" "watch agents positions"`,
+          gridTemplateRows: "minmax(320px, auto) auto auto",
+          gridTemplateAreas: `"watch chart approval" "watch agents positions" "watch analytics analytics"`,
           gap: 16,
         }}
       >
@@ -80,6 +81,11 @@ export default function Terminal() {
         <section style={{ ...panel, gridArea: "positions" }}>
           <h2 style={h2}>Positions &amp; P&amp;L</h2>
           <Positions refreshKey={refreshKey} />
+        </section>
+
+        <section style={{ ...panel, gridArea: "analytics" }}>
+          <h2 style={h2}>Analytics</h2>
+          <Analytics symbol={symbol} />
         </section>
       </div>
     </main>
