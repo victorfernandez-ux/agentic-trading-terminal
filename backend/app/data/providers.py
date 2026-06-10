@@ -56,9 +56,12 @@ class YahooProvider:
     async def get_quote(self, symbol: str) -> dict:
         res = await self._chart(symbol, "1d", "5d")
         meta = res.get("meta", {})
+        price = meta.get("regularMarketPrice")
+        prev = (meta.get("regularMarketPreviousClose")
+                or meta.get("chartPreviousClose") or meta.get("previousClose"))
+        pct = round((price - prev) / prev * 100, 2) if price and prev else None
         return {"symbol": symbol, "provider": self.name,
-                "price": meta.get("regularMarketPrice"),
-                "pct_change": None}
+                "price": price, "prev_close": prev, "pct_change": pct}
 
     async def get_bars(self, symbol: str, timeframe: str = "1D", limit: int = 100) -> dict:
         interval, rng = _YF.get(timeframe, ("1d", "1y"))

@@ -5,6 +5,7 @@ import PriceChart from "@/components/PriceChart";
 import AgentConsole from "@/components/AgentConsole";
 import ApprovalQueue from "@/components/ApprovalQueue";
 import Positions from "@/components/Positions";
+import Watchlist, { type Quote } from "@/components/Watchlist";
 
 type Health = { status: string; trading_mode: string; require_human_approval: boolean };
 
@@ -23,6 +24,7 @@ export default function Terminal() {
   const [err, setErr] = useState<string | null>(null);
   const [symbol, setSymbol] = useState("BTC/USD");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [quotes, setQuotes] = useState<Record<string, Quote>>({});
 
   useEffect(() => {
     fetch("/api/health")
@@ -57,32 +59,12 @@ export default function Terminal() {
       >
         <section style={{ ...panel, gridArea: "watch" }}>
           <h2 style={h2}>Watchlist</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {WATCH.map((s) => (
-              <button
-                key={s}
-                onClick={() => setSymbol(s)}
-                style={{
-                  textAlign: "left",
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #1c2330",
-                  background: s === symbol ? "#1a2030" : "transparent",
-                  color: s === symbol ? "#7aa2f7" : "#d6deeb",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  fontSize: 13,
-                }}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <Watchlist symbols={WATCH} selected={symbol} onSelect={setSymbol} onQuotes={setQuotes} />
         </section>
 
         <section style={{ ...panel, gridArea: "chart" }}>
           <h2 style={h2}>Chart</h2>
-          <PriceChart symbol={symbol} />
+          <PriceChart symbol={symbol} liveQuote={quotes[symbol]} />
         </section>
 
         <section style={{ ...panel, gridArea: "agents" }}>

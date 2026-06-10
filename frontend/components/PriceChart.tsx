@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createChart, type IChartApi } from "lightweight-charts";
+import type { Quote } from "@/components/Watchlist";
 
 type Bar = { t: number | string; o: number; h: number; l: number; c: number; v: number };
 
-/** Live candlestick chart backed by /api/market/bars/{symbol}. */
-export default function PriceChart({ symbol }: { symbol: string }) {
+/** Live candlestick chart backed by /api/market/bars/{symbol}.
+ *  Header shows the streaming price/% change when a live quote is supplied. */
+export default function PriceChart({ symbol, liveQuote }: { symbol: string; liveQuote?: Quote }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const [status, setStatus] = useState("loading…");
@@ -51,10 +53,23 @@ export default function PriceChart({ symbol }: { symbol: string }) {
     return () => { window.removeEventListener("resize", onResize); chart.remove(); };
   }, [symbol]);
 
+  const up = (liveQuote?.pct_change ?? 0) >= 0;
   return (
     <div>
-      <div style={{ fontSize: 11, color: "#5c6773", marginBottom: 6 }}>
-        {symbol} · {status}
+      <div style={{ fontSize: 11, color: "#5c6773", marginBottom: 6, display: "flex", gap: 10 }}>
+        <span style={{ color: "#d6deeb" }}>{symbol}</span>
+        {liveQuote?.price != null && (
+          <span style={{ color: "#d6deeb" }}>
+            {liveQuote.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            {liveQuote.pct_change != null && (
+              <span style={{ color: up ? "#8fd694" : "#f7768e", marginLeft: 6 }}>
+                {up ? "+" : ""}
+                {liveQuote.pct_change.toFixed(2)}%
+              </span>
+            )}
+          </span>
+        )}
+        <span>· {status}</span>
       </div>
       <div ref={containerRef} />
     </div>
