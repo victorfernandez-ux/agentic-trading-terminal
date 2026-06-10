@@ -31,6 +31,22 @@ class OrderRow(Base):
     data = Column(JSON)  # full order record
 
 
+class AuditRow(Base):
+    """Append-only audit trail (MVP req #5: log and replay every decision).
+
+    `run_id` ties together every event of one agent run so a run can be
+    replayed end-to-end; `event`/`symbol` are indexed for filtering.
+    """
+
+    __tablename__ = "audit_log"
+    seq = Column(Integer, primary_key=True, autoincrement=True)  # replay order
+    ts = Column(String, index=True)      # ISO-8601 UTC
+    event = Column(String, index=True)   # e.g. agent.risk, order.approved
+    run_id = Column(String, index=True, nullable=True)
+    symbol = Column(String, index=True, nullable=True)
+    payload = Column(JSON)               # full event payload
+
+
 def _make_engine():
     """Try the configured DB; fall back to SQLite if it's unreachable."""
     url = settings.database_url

@@ -16,6 +16,7 @@ API and UI still work end-to-end offline.
 
 from __future__ import annotations
 
+import uuid
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -30,6 +31,7 @@ DEFAULT_NOTIONAL_USD = 1000.0
 
 
 class AgentState(TypedDict, total=False):
+    run_id: str  # ties all audit events of one run together (replayable)
     symbol: str
     question: str
     market: dict
@@ -93,6 +95,7 @@ def _build_order(state: AgentState) -> dict | None:
         "est_price": price,
         "est_notional": round(qty * price, 2),
         "risk_pct": risk_pct,
+        "run_id": state.get("run_id"),
     }
 
 
@@ -101,7 +104,8 @@ async def research_node(state: AgentState) -> AgentState:
     quote = await get_quote_tool(symbol)
     bars = await get_bars_tool(symbol, timeframe="1D", limit=60)
     state["market"] = {"quote": quote, "trend": _summarize_bars(bars.get("bars", []))}
-    audit_log("agent.research.data", {"symbol": symbol, "market": state["market"]})
+    audit_log("agent.research.data", {"run_id": state.get("run_id"), "symbol": symbol,
+                                      "market": state["market"]})
 
     sys_prompt = (
         "You are an equity/crypto research agent. Form a concise, falsifiable "
@@ -133,7 +137,8 @@ async def risk_node(state: AgentState) -> AgentState:
     out = await llm.complete_json(system=sys_prompt, user=user_prompt)
     state["risk"] = out
     state["vetoed"] = bool(out.get("veto", False))
-    audit_log("agent.risk", {"symbol": state["symbol"], "risk": out})
+    audit_log("agent.risk", {"run_id": state.get("run_id"), "symbol": state["symbol"],
+                             "risk": out})
     return state
 
 
@@ -146,6 +151,10 @@ async def portfolio_node(state: AgentState) -> AgentState:
             "No action: {}.".format(reason),
             state.get("risk", {}).get("reason", ""),
         ]
+        audit_log("agent.portfolio", {"run_id": state.get("run_id"),
+                                      "symbol": state["symbol"],
+                                      "proposed_action": None, "order": None,
+                                      "no_action_reason": reason})
         return state
 
     sys_prompt = (
@@ -161,6 +170,9 @@ async def portfolio_node(state: AgentState) -> AgentState:
     state["proposed_action"] = out.get("proposed_action")
     state["order"] = _build_order(state)
     state["rationale"] = (state.get("rationale") or []) + list(out.get("rationale", []))
+    audit_log("agent.portfolio", {"run_id": state.get("run_id"), "symbol": state["symbol"],
+                                  "proposed_action": state["proposed_action"],
+                                  "order": state["order"]})
     return state
 
 
@@ -181,8 +193,10 @@ _GRAPH = build_graph()
 
 async def run_research(symbol: str, question: str) -> dict:
     """Run the agent loop and return a trade-thesis proposal (+ order draft)."""
+    run_id = "run_" + uuid.uuid4().hex[:8]
     if not llm.is_configured():
         return {
+            "run_id": run_id,
             "symbol": symbol,
             "thesis": (
                 "[stub] No LLM key configured. Set OPENROUTER_API_KEY in .env to run "
@@ -194,9 +208,14 @@ async def run_research(symbol: str, question: str) -> dict:
             "rationale": ["LLM not configured -- returning deterministic stub."],
         }
 
-    state: AgentState = {"symbol": symbol, "question": question}
+    audit_log("agent.run.start", {"run_id": run_id, "symbol": symbol, "question": question})
+    state: AgentState = {"run_id": run_id, "symbol": symbol, "question": question}
     result = await _GRAPH.ainvoke(state)
+    audit_log("agent.run.end", {"run_id": run_id, "symbol": symbol,
+                                "direction": result.get("direction", "none"),
+                                "has_order": result.get("order") is not None})
     return {
+        "run_id": run_id,
         "symbol": symbol,
         "thesis": result.get("thesis", ""),
         "direction": result.get("direction", "none"),
