@@ -69,12 +69,12 @@ class YahooProvider:
         res = await self._chart(symbol, interval, rng)
         ts = res.get("timestamp", []) or []
         q = (res.get("indicators", {}).get("quote", [{}]) or [{}])[0]
-        o, h, l, c, v = (q.get(k, []) for k in ("open", "high", "low", "close", "volume"))
+        o, h, lo, c, v = (q.get(k, []) for k in ("open", "high", "low", "close", "volume"))
         bars = []
         for i, t in enumerate(ts):
             if c[i] is None:
                 continue
-            bars.append({"t": t * 1000, "o": o[i], "h": h[i], "l": l[i],
+            bars.append({"t": t * 1000, "o": o[i], "h": h[i], "l": lo[i],
                          "c": c[i], "v": v[i] or 0})
         bars = bars[-limit:]
         return {"symbol": symbol, "provider": self.name, "timeframe": timeframe,

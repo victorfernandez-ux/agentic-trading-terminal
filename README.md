@@ -1,5 +1,7 @@
 # Agentic Trading Terminal
 
+[![CI](https://github.com/victorfernandez-ux/agentic-trading-terminal/actions/workflows/ci.yml/badge.svg)](https://github.com/victorfernandez-ux/agentic-trading-terminal/actions/workflows/ci.yml)
+
 AI agents research and prepare trades for crypto and US equities; **a human approves every order** before any
 (paper) execution. See **[PROJECT_PLAN.md](./PROJECT_PLAN.md)** for vision/architecture/tooling research and
 **[HANDOFF.md](./HANDOFF.md)** for current status, decisions, and known issues.
