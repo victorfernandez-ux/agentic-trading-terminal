@@ -28,6 +28,8 @@ from app.core.audit import audit_log
 # Default notional per proposed trade (paper). Sizing stays in code, not the
 # LLM, so position sizes are always sane and auditable.
 DEFAULT_NOTIONAL_USD = 1000.0
+# Hard ceiling on any proposed order's notional (see _build_order).
+MAX_NOTIONAL_USD = 2 * DEFAULT_NOTIONAL_USD
 
 
 class AgentState(TypedDict, total=False):
@@ -87,13 +89,25 @@ def _build_order(state: AgentState) -> dict | None:
     symbol = state["symbol"]
     is_crypto = "/" in symbol or "-" in symbol
     qty = round(notional / price, 6) if is_crypto else max(1, round(notional / price))
+    est_notional = round(qty * price, 2)
+    # Safety cap: the max(1, ...) floor on whole-share equities can silently
+    # blow past the intended notional on expensive stocks (1 share of BRK.A
+    # is ~$700k). Never propose an order above 2x the default notional —
+    # downgrade to "no order" with an explicit rationale instead.
+    if est_notional > MAX_NOTIONAL_USD:
+        state["rationale"] = (state.get("rationale") or []) + [
+            "No order: minimum size for {} is ~${:,.2f}, above the ${:,.0f} "
+            "notional safety cap (2x default notional).".format(
+                symbol, est_notional, MAX_NOTIONAL_USD)
+        ]
+        return None
     return {
         "symbol": symbol,
         "side": "buy" if direction == "long" else "sell",
         "qty": qty,
         "order_type": "market",
         "est_price": price,
-        "est_notional": round(qty * price, 2),
+        "est_notional": est_notional,
         "risk_pct": risk_pct,
         "run_id": state.get("run_id"),
     }
