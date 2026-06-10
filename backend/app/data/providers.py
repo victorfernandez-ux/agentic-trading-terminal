@@ -15,6 +15,7 @@ Normalized shapes:
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Protocol
 
 import httpx
@@ -163,6 +164,8 @@ class AlpacaProvider:
 
 _POLY_TF = {"1m": (1, "minute"), "5m": (5, "minute"), "1h": (1, "hour"),
             "1H": (1, "hour"), "1d": (1, "day"), "1D": (1, "day")}
+# Lookback window per resolution: enough calendar days to cover ~100+ bars.
+_POLY_LOOKBACK_DAYS = {"minute": 7, "hour": 90, "day": 730}
 
 
 class PolygonProvider:
@@ -179,7 +182,10 @@ class PolygonProvider:
 
     async def get_bars(self, symbol: str, timeframe: str = "1D", limit: int = 100) -> dict:
         mult, span = _POLY_TF.get(timeframe, (1, "day"))
-        url = f"{self.BASE}/v2/aggs/ticker/{symbol}/range/{mult}/{span}/2024-01-01/2030-01-01"
+        # Date range computed from today (was hardcoded 2024->2030).
+        end = date.today()
+        start = end - timedelta(days=_POLY_LOOKBACK_DAYS.get(span, 730))
+        url = f"{self.BASE}/v2/aggs/ticker/{symbol}/range/{mult}/{span}/{start}/{end}"
         params = {"limit": limit, "sort": "desc", "apiKey": settings.polygon_api_key}
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.get(url, params=params)

@@ -3,7 +3,7 @@
 **Owner:** Victor Fernandez (NextVibe AI)
 **Date:** June 10, 2026
 **Reference:** [FinceptTerminal](https://github.com/Fincept-Corporation/FinceptTerminal) (C++20/Qt6, 19.4k★)
-**Status:** Planning — pre-build
+**Status:** MVP shipped (Phases 0–3 + streaming) — see README/HANDOFF for current state
 
 ---
 
