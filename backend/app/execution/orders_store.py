@@ -6,6 +6,12 @@ engine create/approve through here.
 
 Lifecycle:  PENDING_APPROVAL -> (human) -> SUBMITTED | REJECTED
 Nothing reaches a broker until approve() is called.
+
+Concurrency: approve/reject *claim* the order with a single
+``UPDATE ... WHERE status='PENDING_APPROVAL'`` — atomic in SQLite and
+Postgres — so two concurrent approvals cannot both submit (no
+check-then-act race). The store itself guards missing records and wrong
+states; the API layer only maps those errors to HTTP codes.
 """
 
 from __future__ import annotations
@@ -16,6 +22,19 @@ from app.config import settings
 from app.core.audit import audit_log
 from app.core.db import OrderRow, SessionLocal
 from app.execution.broker import get_broker
+
+
+class OrderNotFound(LookupError):
+    """No order with that id exists."""
+
+
+class InvalidOrderState(RuntimeError):
+    """Order exists but is not in a state that allows the transition."""
+
+    def __init__(self, order_id: str, status: str):
+        self.order_id = order_id
+        self.status = status
+        super().__init__(f"order {order_id} is {status}")
 
 
 def _new_id() -> str:
@@ -54,11 +73,42 @@ def _save(order_id: str, record: dict) -> None:
             s.commit()
 
 
+def _claim(order_id: str, new_status: str) -> None:
+    """Atomically transition PENDING_APPROVAL -> new_status, or raise.
+
+    The single UPDATE with the status predicate is the whole point: the
+    check and the write happen in one statement inside one transaction,
+    so exactly one concurrent caller can win the claim.
+    """
+    with SessionLocal() as s:
+        claimed = (
+            s.query(OrderRow)
+            .filter(OrderRow.id == order_id,
+                    OrderRow.status == "PENDING_APPROVAL")
+            .update({"status": new_status}, synchronize_session=False)
+        )
+        s.commit()
+    if claimed:
+        return
+    record = get(order_id)
+    if record is None:
+        raise OrderNotFound(order_id)
+    raise InvalidOrderState(order_id, record["status"])
+
+
 async def approve(order_id: str) -> dict:
     """Human approval -> submit to the active (paper) broker; persist result."""
+    _claim(order_id, "SUBMITTED")  # raises OrderNotFound / InvalidOrderState
     record = get(order_id)
+    record["status"] = "SUBMITTED"
     broker = get_broker()
-    result = await broker.submit(record)
+    try:
+        result = await broker.submit(record)
+    except Exception:
+        # Broker failed after the claim: release it so a human can retry.
+        record["status"] = "PENDING_APPROVAL"
+        _save(order_id, record)
+        raise
     # Record a fill price for P&L. Prefer the estimate captured at proposal;
     # for manual orders without one, pull a live quote.
     fill_price = record.get("est_price")
@@ -69,7 +119,6 @@ async def approve(order_id: str) -> dict:
         except Exception:  # noqa: BLE001
             fill_price = None
     record["fill_price"] = fill_price
-    record["status"] = "SUBMITTED"
     record["broker_result"] = result
     record["mode"] = settings.trading_mode
     _save(order_id, record)
@@ -78,6 +127,8 @@ async def approve(order_id: str) -> dict:
 
 
 def reject(order_id: str) -> dict:
+    """Human rejection. Only a PENDING_APPROVAL order can be rejected."""
+    _claim(order_id, "REJECTED")  # raises OrderNotFound / InvalidOrderState
     record = get(order_id)
     record["status"] = "REJECTED"
     _save(order_id, record)

@@ -32,20 +32,28 @@ async def propose(order: OrderProposal) -> dict:
 
 @router.post("/{order_id}/approve")
 async def approve(order_id: str) -> dict:
-    """Human approval step. Required before any broker submission."""
-    record = store.get(order_id)
-    if record is None:
-        raise HTTPException(404, "order not found")
-    if record["status"] != "PENDING_APPROVAL":
-        raise HTTPException(409, f"order is {record['status']}")
-    return await store.approve(order_id)
+    """Human approval step. Required before any broker submission.
+
+    The store enforces the state machine atomically (single UPDATE WHERE
+    status='PENDING_APPROVAL'), so concurrent double-approves cannot both
+    submit; this layer only maps store errors to HTTP codes.
+    """
+    try:
+        return await store.approve(order_id)
+    except store.OrderNotFound:
+        raise HTTPException(404, "order not found") from None
+    except store.InvalidOrderState as e:
+        raise HTTPException(409, f"order is {e.status}") from None
 
 
 @router.post("/{order_id}/reject")
 async def reject(order_id: str) -> dict:
-    if store.get(order_id) is None:
-        raise HTTPException(404, "order not found")
-    return store.reject(order_id)
+    try:
+        return store.reject(order_id)
+    except store.OrderNotFound:
+        raise HTTPException(404, "order not found") from None
+    except store.InvalidOrderState as e:
+        raise HTTPException(409, f"order is {e.status}") from None
 
 
 @router.get("")
