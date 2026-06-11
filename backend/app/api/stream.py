@@ -19,6 +19,7 @@ import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.alerts import engine as alert_engine
 from app.data.providers import get_quotes_batch
 
 router = APIRouter(tags=["stream"])
@@ -61,9 +62,13 @@ async def ws_quotes(ws: WebSocket) -> None:
         return
 
     log.info("ws quotes stream open: %s (every %.0fs)", symbols, interval)
+    last_alert_seq = alert_engine.latest_seq()  # only push NEW fires
     try:
         while True:
             quotes = await _fetch_quotes(symbols)
+            for event in alert_engine.fired_events(last_alert_seq):
+                last_alert_seq = event["seq"]
+                await ws.send_json({"type": "alert", **event})
             await ws.send_json({"type": "quotes", "ts": int(time.time() * 1000),
                                 "quotes": quotes})
             await asyncio.sleep(interval)

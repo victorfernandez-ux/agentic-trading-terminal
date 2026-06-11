@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import agents, analytics, audit, health, market, orders, stream
+from app.api import agents, alerts, analytics, audit, health, market, orders, stream
 from app.config import settings
 from app.core.db import init_db
 
@@ -16,7 +18,24 @@ logging.basicConfig(level=settings.log_level)
 
 init_db()
 
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Run the alert evaluator for the app's lifetime (single task,
+    Grafana-style scheduler — never one per connection)."""
+    from app.alerts.engine import evaluator_loop
+
+    task = asyncio.create_task(evaluator_loop(), name="alert-evaluator")
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="Agentic Trading Terminal",
     version=__version__,
     description="AI agents research and prepare trades; the human approves every live order.",
@@ -36,6 +55,7 @@ app.include_router(market.router)
 app.include_router(analytics.router)
 app.include_router(agents.router)
 app.include_router(orders.router)
+app.include_router(alerts.router)
 app.include_router(audit.router)
 app.include_router(stream.router)
 

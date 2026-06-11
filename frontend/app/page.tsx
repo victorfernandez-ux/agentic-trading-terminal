@@ -9,6 +9,7 @@ import Watchlist, { type Quote } from "@/components/Watchlist";
 import Analytics from "@/components/Analytics";
 import SymbolSearch from "@/components/SymbolSearch";
 import News from "@/components/News";
+import Alerts from "@/components/Alerts";
 
 type Health = { status: string; trading_mode: string; require_human_approval: boolean };
 
@@ -81,8 +82,8 @@ export default function Terminal() {
         style={{
           display: "grid",
           gridTemplateColumns: "200px 1.3fr 340px",
-          gridTemplateRows: "minmax(320px, auto) auto auto",
-          gridTemplateAreas: `"watch chart approval" "watch agents positions" "watch analytics news"`,
+          gridTemplateRows: "minmax(320px, auto) auto auto auto",
+          gridTemplateAreas: `"watch chart approval" "watch agents positions" "watch analytics news" "watch alerts alerts"`,
           gap: 16,
         }}
       >
@@ -126,6 +127,11 @@ export default function Terminal() {
         <section style={{ ...panel, gridArea: "news", maxHeight: 420 }}>
           <h2 style={h2}>News — {symbol}</h2>
           <News symbol={symbol} />
+        </section>
+
+        <section style={{ ...panel, gridArea: "alerts" }}>
+          <h2 style={h2}>Alerts</h2>
+          <Alerts symbol={symbol} />
         </section>
       </div>
     </main>

@@ -31,6 +31,18 @@ class OrderRow(Base):
     data = Column(JSON)  # full order record
 
 
+class AlertRow(Base):
+    """Alert rules (research: the stickiest retail feature). One row per
+    rule; `data` holds the full alert dict including crossing state."""
+
+    __tablename__ = "alerts"
+    seq = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String, unique=True, index=True)
+    status = Column(String, index=True)   # active | paused | fired
+    symbol = Column(String, index=True)
+    data = Column(JSON)
+
+
 class AuditRow(Base):
     """Append-only audit trail (MVP req #5: log and replay every decision).
 
