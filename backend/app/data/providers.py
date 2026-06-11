@@ -64,6 +64,34 @@ class YahooProvider:
         return {"symbol": symbol, "provider": self.name,
                 "price": price, "prev_close": prev, "pct_change": pct}
 
+    async def get_quotes_batch(self, symbols: list[str]) -> dict[str, dict]:
+        """Batch quotes via the keyless spark endpoint (hard cap 20 symbols).
+
+        One request replaces N chart calls — the difference between ~5,400
+        and ~900 Yahoo requests/hour for a six-symbol watchlist, which
+        matters because Yahoo throttles by traffic pattern (yfinance #2128).
+        Day %-change = last close vs prior daily close from a 2-day window.
+        """
+        if not symbols:
+            return {}
+        mapped = {self._sym(s): s for s in symbols[:20]}
+        params = {"symbols": ",".join(mapped), "range": "2d", "interval": "1d"}
+        async with httpx.AsyncClient(timeout=12, headers=_UA) as c:
+            r = await c.get("https://query1.finance.yahoo.com/v8/finance/spark",
+                            params=params)
+            r.raise_for_status()
+            data = r.json()
+        out: dict[str, dict] = {}
+        for ysym, payload in (data or {}).items():
+            orig = mapped.get(ysym, ysym)
+            closes = [v for v in (payload.get("close") or []) if v is not None]
+            price = closes[-1] if closes else None
+            prev = closes[-2] if len(closes) > 1 else payload.get("chartPreviousClose")
+            pct = round((price - prev) / prev * 100, 2) if price and prev else None
+            out[orig] = {"symbol": orig, "provider": "yahoo:spark",
+                         "price": price, "prev_close": prev, "pct_change": pct}
+        return out
+
     async def get_bars(self, symbol: str, timeframe: str = "1D", limit: int = 100) -> dict:
         interval, rng = _YF.get(timeframe, ("1d", "1y"))
         res = await self._chart(symbol, interval, rng)
@@ -239,3 +267,34 @@ def get_provider(symbol: str) -> DataProvider:
     if settings.polygon_api_key:
         chain.append(PolygonProvider())
     return FallbackProvider(chain)
+
+
+async def get_quotes_batch(symbols: list[str]) -> dict[str, dict]:
+    """Module-level batch quotes: spark first, per-symbol fallback on miss.
+
+    Symbols spark cannot serve (or a spark outage) degrade to the existing
+    per-symbol FallbackProvider chain, so callers always get one entry per
+    requested symbol.
+    """
+    out: dict[str, dict] = {}
+    try:
+        out = await YahooProvider().get_quotes_batch(symbols)
+    except Exception:  # noqa: BLE001 -- spark down; fall through per-symbol
+        out = {}
+
+    missing = [s for s in symbols if s not in out or out[s].get("price") is None]
+
+    async def _one(sym: str) -> dict:
+        try:
+            return await get_provider(sym).get_quote(sym)
+        except Exception as e:  # noqa: BLE001
+            return {"symbol": sym, "provider": "?", "price": None,
+                    "pct_change": None, "error": f"{type(e).__name__}: {str(e)[:120]}"}
+
+    if missing:
+        import asyncio
+
+        fixed = await asyncio.gather(*(_one(s) for s in missing))
+        for q in fixed:
+            out[q["symbol"]] = q
+    return out

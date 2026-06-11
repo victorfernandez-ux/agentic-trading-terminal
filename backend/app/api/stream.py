@@ -19,7 +19,7 @@ import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.data.providers import get_provider
+from app.data.providers import get_quotes_batch
 
 router = APIRouter(tags=["stream"])
 log = logging.getLogger("stream")
@@ -28,13 +28,19 @@ DEFAULT_INTERVAL_S = 4.0
 MAX_SYMBOLS = 20
 
 
-async def _fetch_quote(symbol: str) -> dict:
-    """One shielded quote fetch — never raises into the stream loop."""
+async def _fetch_quotes(symbols: list[str]) -> list[dict]:
+    """Shielded batch fetch (1 spark request for <=20 symbols), keeping the
+    response aligned to the requested symbol order. Never raises into the
+    stream loop."""
     try:
-        return await get_provider(symbol).get_quote(symbol)
+        quotes = await get_quotes_batch(symbols)
+        return [quotes.get(s) or {"symbol": s, "provider": "?", "price": None,
+                                  "pct_change": None, "error": "no data"}
+                for s in symbols]
     except Exception as e:  # noqa: BLE001
-        return {"symbol": symbol, "provider": "?", "price": None,
-                "pct_change": None, "error": f"{type(e).__name__}: {str(e)[:120]}"}
+        return [{"symbol": s, "provider": "?", "price": None,
+                 "pct_change": None, "error": f"{type(e).__name__}: {str(e)[:120]}"}
+                for s in symbols]
 
 
 @router.websocket("/ws/quotes")
@@ -57,9 +63,9 @@ async def ws_quotes(ws: WebSocket) -> None:
     log.info("ws quotes stream open: %s (every %.0fs)", symbols, interval)
     try:
         while True:
-            quotes = await asyncio.gather(*(_fetch_quote(s) for s in symbols))
+            quotes = await _fetch_quotes(symbols)
             await ws.send_json({"type": "quotes", "ts": int(time.time() * 1000),
-                                "quotes": list(quotes)})
+                                "quotes": quotes})
             await asyncio.sleep(interval)
     except WebSocketDisconnect:
         pass

@@ -8,12 +8,13 @@ from app.main import app
 client = TestClient(app)
 
 
-async def _fake_fetch(symbol: str) -> dict:
-    return {"symbol": symbol, "provider": "fake", "price": 123.45, "pct_change": 1.5}
+async def _fake_batch(symbols):
+    return {s: {"symbol": s, "provider": "fake", "price": 123.45, "pct_change": 1.5}
+            for s in symbols}
 
 
 def test_ws_quotes_streams_frames(monkeypatch):
-    monkeypatch.setattr(stream, "_fetch_quote", _fake_fetch)
+    monkeypatch.setattr(stream, "get_quotes_batch", _fake_batch)
     with client.websocket_connect("/ws/quotes?symbols=AAPL,BTC/USD") as ws:
         msg = ws.receive_json()
     assert msg["type"] == "quotes"
@@ -25,14 +26,12 @@ def test_ws_quotes_streams_frames(monkeypatch):
 
 
 def test_ws_quotes_shields_per_symbol_errors(monkeypatch):
-    async def boom(symbol: str) -> dict:
+    # Batch layer blowing up entirely must still yield one frame per symbol
+    # with an error field — the stream itself never dies.
+    async def boom(symbols):
         raise RuntimeError("provider down")
-    # The real wrapper shields errors; simulate via the real function with a
-    # broken provider instead: patch get_provider used inside _fetch_quote.
-    class BadProvider:
-        async def get_quote(self, symbol):
-            raise RuntimeError("provider down")
-    monkeypatch.setattr(stream, "get_provider", lambda s: BadProvider())
+
+    monkeypatch.setattr(stream, "get_quotes_batch", boom)
     with client.websocket_connect("/ws/quotes?symbols=AAPL") as ws:
         msg = ws.receive_json()
     assert msg["type"] == "quotes"
