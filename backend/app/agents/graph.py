@@ -22,7 +22,12 @@ from typing import TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from app.agents import llm
-from app.agents.tools import get_bars_tool, get_indicators_tool, get_quote_tool
+from app.agents.tools import (
+    get_bars_tool,
+    get_indicators_tool,
+    get_news_tool,
+    get_quote_tool,
+)
 from app.core.audit import audit_log
 
 # Default notional per proposed trade (paper). Sizing stays in code, not the
@@ -122,6 +127,11 @@ async def research_node(state: AgentState) -> AgentState:
         ind = await get_indicators_tool(symbol, timeframe="1D", limit=120)
         state["market"]["technical"] = {"latest": ind.get("latest"),
                                         "signal": ind.get("signal")}
+    except Exception:  # noqa: BLE001
+        pass
+    try:  # headlines: event/narrative evidence, same guarded pattern
+        news = await get_news_tool(symbol, limit=5)
+        state["market"]["news"] = [h["title"] for h in news.get("headlines", [])]
     except Exception:  # noqa: BLE001
         pass
     audit_log("agent.research.data", {"run_id": state.get("run_id"), "symbol": symbol,
