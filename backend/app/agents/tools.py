@@ -12,10 +12,12 @@ from __future__ import annotations
 from app.analytics.backtest import run_backtest as _run_backtest
 from app.analytics.personas import consult_personas as _consult_personas
 from app.analytics.risk import compute_risk as _compute_risk
+from app.analytics.screener import run_screen as _run_screen
 from app.analytics.technical import compute_indicators as _compute_indicators
 from app.data.news import fetch_news
 from app.data.options_chain import fetch_chain
 from app.data.providers import _is_crypto, get_provider
+from app.data.universe import GROUPS
 
 
 async def get_quote_tool(symbol: str) -> dict:
@@ -75,6 +77,17 @@ async def consult_personas_tool(symbol: str, fundamentals: dict | None = None,
     return {"symbol": symbol, **_consult_personas(bars, fundamentals)}
 
 
+async def run_screener_tool(screen: str = "composite_bullish",
+                            universe: str = "sp100", top: int = 5) -> dict:
+    """Tool: scan a universe for candidates (deterministic ranking in code)."""
+    syms = GROUPS.get(universe, GROUPS["sp100"])
+    out = await _run_screen(screen, syms, top=top)
+    out["matches"] = [{k: r.get(k) for k in ("symbol", "price", "day_pct",
+                                             "rsi14", "signal_score", "matched")}
+                      for r in out["matches"]]
+    return out
+
+
 async def get_news_tool(symbol: str, limit: int = 6) -> dict:
     """Tool: latest headlines for a symbol — event/narrative evidence."""
     items = await fetch_news(symbol, limit=limit)
@@ -108,4 +121,5 @@ TOOLS = {
     "consult_personas": consult_personas_tool,
     "get_option_chain": get_option_chain_tool,
     "get_news": get_news_tool,
+    "run_screener": run_screener_tool,
 }

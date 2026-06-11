@@ -17,10 +17,12 @@ from app.analytics.backtest import STRATEGIES, run_backtest
 from app.analytics.options import bs_price_greeks, implied_vol
 from app.analytics.personas import consult_personas
 from app.analytics.risk import compute_risk
+from app.analytics.screener import SCREENS, run_screen
 from app.analytics.technical import compute_indicators
 from app.analytics.valuation import dcf_valuation
 from app.data.options_chain import fetch_chain
 from app.data.providers import _is_crypto, get_provider
+from app.data.universe import GROUPS
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 log = logging.getLogger("analytics")
@@ -226,3 +228,34 @@ async def options_price(req: OptionPriceRequest) -> dict:
                                             req.days / 365.0, rate=req.rate,
                                             div_yield=req.div_yield, kind=req.kind)
     return result
+
+
+@router.get("/screener")
+async def screener(
+    screen: str = "composite_bullish",
+    universe: str = "sp100",
+    symbols: str | None = None,
+    top: int = 20,
+) -> dict:
+    """Scan a universe and rank matches. `universe` is a named group
+    (sp100, indices, fx, futures, crypto) or 'watchlist' with `symbols`
+    as a comma-separated list. Warm rescans cost zero chart calls."""
+    if screen not in SCREENS:
+        raise HTTPException(400, f"unknown screen; available: {SCREENS}")
+    if universe == "watchlist":
+        syms = [s for s in (symbols or "").split(",") if s.strip()]
+        if not syms:
+            raise HTTPException(400, "universe=watchlist needs ?symbols=A,B,C")
+    else:
+        syms = GROUPS.get(universe, [])
+        if not syms:
+            raise HTTPException(400, f"unknown universe; have {sorted(GROUPS)} or watchlist")
+    try:
+        out = await run_screen(screen, syms, top=max(1, min(top, 50)))
+        return {"universe": universe, **out, "screens_available": SCREENS}
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except Exception as e:  # noqa: BLE001
+        log.warning("screener failed (%s/%s): %s", screen, universe, e)
+        return {"universe": universe, "screen": screen, "matches": [],
+                "error": f"{type(e).__name__}: {str(e)[:160]}"}
