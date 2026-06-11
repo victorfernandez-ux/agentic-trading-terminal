@@ -7,7 +7,8 @@
  * the selected symbol and renders a compact, scannable summary.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createChart, type IChartApi } from "lightweight-charts";
 
 const TABS = ["Signal", "Risk", "Backtest", "DCF", "Personas"] as const;
 type Tab = (typeof TABS)[number];
@@ -233,6 +234,12 @@ export default function Analytics({ symbol }: { symbol: string }) {
               ["Fees", <span key="4">{d.fee_bps} bps/side</span>],
             ]}
           />
+          <TradeList trades={d.trades} />
+          {Array.isArray(d.equity_curve) && d.equity_curve.length > 1 && (
+            <div style={{ flexBasis: "100%" }}>
+              <EquityChart points={d.equity_curve} />
+            </div>
+          )}
         </div>
       )}
 
@@ -281,6 +288,67 @@ export default function Analytics({ symbol }: { symbol: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+function EquityChart({ points }: { points: { t: number; equity: number }[] }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!ref.current || points.length === 0) return;
+    const chart: IChartApi = createChart(ref.current, {
+      height: 170,
+      layout: { background: { color: "transparent" }, textColor: "#5c6773", fontSize: 10 },
+      grid: { vertLines: { color: "#141a26" }, horzLines: { color: "#141a26" } },
+      rightPriceScale: { borderColor: "#1c2330" },
+      timeScale: { borderColor: "#1c2330" },
+    });
+    const series = chart.addAreaSeries({
+      lineColor: "#7aa2f7",
+      topColor: "#7aa2f733",
+      bottomColor: "#7aa2f705",
+      lineWidth: 2,
+    });
+    series.setData(
+      points.map((p) => ({ time: Math.floor(p.t / 1000) as never, value: p.equity }))
+    );
+    chart.timeScale().fitContent();
+    const onResize = () => ref.current && chart.applyOptions({ width: ref.current.clientWidth });
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      chart.remove();
+    };
+  }, [points]);
+
+  return <div ref={ref} style={{ width: "100%", marginTop: 10 }} />;
+}
+
+function TradeList({ trades }: { trades: any[] }) {
+  if (!trades?.length) return null;
+  const fmt = (t: number) => new Date(t).toISOString().slice(0, 10);
+  return (
+    <table style={{ fontSize: 11, borderCollapse: "collapse", marginTop: 8 }}>
+      <thead>
+        <tr style={{ color: dim, textAlign: "left" }}>
+          <th style={cell}>Entry</th><th style={cell}>@</th>
+          <th style={cell}>Exit</th><th style={cell}>@</th>
+          <th style={cell}>P&L</th>
+        </tr>
+      </thead>
+      <tbody>
+        {trades.slice(-8).map((t, i) => (
+          <tr key={i}>
+            <td style={cell}>{fmt(t.entry_t)}</td>
+            <td style={cell}><Num v={t.entry_price} /></td>
+            <td style={cell}>{fmt(t.exit_t)}</td>
+            <td style={cell}><Num v={t.exit_price} /></td>
+            <td style={cell}><Num v={t.pnl_pct} suffix="%" colorize /></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
