@@ -19,6 +19,13 @@ top-5 headlines as evidence), and a market screener (`app/analytics/screener.py`
 fx/futures/crypto universes in `app/data/universe.py`, 15-min bar cache + Semaphore(4) rate-limit discipline,
 `GET /analytics/screener`, Screener tab with click-to-load, `run_screener` + `get_news` agent tools).
 Backend tests: 111.
+**v1.5 (June 11, 2026, night):** alerts engine — `app/alerts/` (store + pure evaluator with crossing-side
+memory; first evaluation after create/re-arm seeds silently), single lifespan evaluator task (fast tier
+price/day% every 4s on the spark batch; RSI/signal tier every ~60s from cached bars), cooldowns, 'once'
+self-pause, fired events -> audit_log + ring buffer -> {type:'alert'} WS frames + GET /alerts/fired
+backfill, /alerts CRUD, Alerts panel (create/pause/re-arm/delete, live state). Plus deterministic sizing
+bands in `_build_order`: ATR%% volatility multiplier (1/0.75/0.5/0.25x) and 0.5x anti-pyramiding on
+same-direction adds, with rationale lines. Backend tests: 130.
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---

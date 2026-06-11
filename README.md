@@ -13,8 +13,10 @@ streaming** in the console, a **backtest equity-curve UI**, **options analytics*
 cookie+crumb, clean-room Black-Scholes Greeks + implied vol), and the v1.4 **awareness/discovery layer**:
 global symbol search (40+ exchanges, FX, indices, futures) with a dynamic watchlist, per-symbol news
 wired into the research agent's evidence, a 9-screen market screener over S&P-100/FX/crypto/futures
-universes, and spark-batched quotes (~20x fewer Yahoo calls). Research notes: [RESEARCH.md](./RESEARCH.md).
-Next up: alerts engine, agent evidence fan-out + bull/bear debate, hardening, auth.
+universes, spark-batched quotes (~20x fewer Yahoo calls), a **server-side alerts engine** (crossing semantics,
+cooldowns, fired events into the audit log + quote stream, Alerts panel), and **deterministic sizing
+bands** (ATR volatility scaling + anti-pyramiding, in code). Research notes: [RESEARCH.md](./RESEARCH.md).
+Next up: agent evidence fan-out + bull/bear debate, hardening, auth.
 
 > Paper-trading only. No autonomous money movement. Every order is human-approved. State persists to a local
 > SQLite DB (or Postgres if configured).
@@ -64,12 +66,12 @@ npm run dev
 
 ## Test
 
-From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (111 passing: health, approval gate +
+From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (130 passing: health, approval gate +
 double-approve race, persistence, audit log + replay, order-sizing notional cap, WebSocket streaming,
 SSE agent-stream sequence, the analytics suite — indicator math, risk metrics, backtester
 no-lookahead/fees, DCF closed-form checks, persona scoring, options (Hull textbook values, put-call
-parity, IV round-trip), spark batch quotes, symbol search, news parse/cache, and screener conditions
-over crafted universes)
+parity, IV round-trip), spark batch quotes, symbol search, news parse/cache, screener conditions
+over crafted universes, alert crossing/cooldown/push semantics, and sizing bands)
 
 ## Layout
 
