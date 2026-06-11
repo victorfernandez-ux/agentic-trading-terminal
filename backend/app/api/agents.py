@@ -1,11 +1,20 @@
-"""Agent-engine endpoints."""
+"""Agent-engine endpoints.
+
+POST /agents/research        one-shot JSON (kept as the REST fallback)
+POST /agents/propose         one-shot JSON + order into the approval queue
+GET  /agents/propose/stream  SSE: live per-node progress, then the same
+                             final payload as /propose (order included)
+"""
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.agents.graph import run_research
+from app.agents.graph import run_research, run_research_stream
 from app.execution import orders_store as store
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -48,3 +57,35 @@ async def propose(req: ResearchRequest) -> dict:
     result["order_id"] = order_record["id"] if order_record else None
     result["order_status"] = order_record["status"] if order_record else None
     return result
+
+
+def _sse(payload: dict) -> str:
+    return "data: " + json.dumps(payload) + "\n\n"
+
+
+@router.get("/propose/stream")
+async def propose_stream(
+    symbol: str, question: str = "Should we take a position, and why?"
+) -> StreamingResponse:
+    """Stream the agent run as SSE; mirrors /propose including order creation."""
+
+    async def gen():
+        try:
+            async for ev in run_research_stream(symbol=symbol, question=question):
+                if ev.get("event") == "result":
+                    order_record = None
+                    draft = ev.get("order")
+                    if draft:
+                        order_record = store.create_pending({**draft, "source": "agent"})
+                    ev["order_id"] = order_record["id"] if order_record else None
+                    ev["order_status"] = order_record["status"] if order_record else None
+                yield _sse(ev)
+        except Exception as e:  # noqa: BLE001 -- surface reason to the UI
+            yield _sse({"event": "error", "error": f"{type(e).__name__}: {str(e)[:200]}"})
+        yield _sse({"event": "done"})
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

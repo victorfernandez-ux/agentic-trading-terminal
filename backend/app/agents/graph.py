@@ -215,18 +215,7 @@ async def run_research(symbol: str, question: str) -> dict:
     """Run the agent loop and return a trade-thesis proposal (+ order draft)."""
     run_id = "run_" + uuid.uuid4().hex[:8]
     if not llm.is_configured():
-        return {
-            "run_id": run_id,
-            "symbol": symbol,
-            "thesis": (
-                "[stub] No LLM key configured. Set OPENROUTER_API_KEY in .env to run "
-                "the live research loop for {}.".format(symbol)
-            ),
-            "direction": "none",
-            "proposed_action": None,
-            "order": None,
-            "rationale": ["LLM not configured -- returning deterministic stub."],
-        }
+        return _stub_payload(run_id, symbol)
 
     audit_log("agent.run.start", {"run_id": run_id, "symbol": symbol, "question": question})
     state: AgentState = {"run_id": run_id, "symbol": symbol, "question": question}
@@ -243,3 +232,102 @@ async def run_research(symbol: str, question: str) -> dict:
         "order": result.get("order"),
         "rationale": [r for r in result.get("rationale", []) if r],
     }
+
+def _stub_payload(run_id: str, symbol: str) -> dict:
+    """Deterministic offline result so API/UI work without an LLM key."""
+    return {
+        "run_id": run_id,
+        "symbol": symbol,
+        "thesis": (
+            "[stub] No LLM key configured. Set OPENROUTER_API_KEY in .env to run "
+            "the live research loop for {}.".format(symbol)
+        ),
+        "direction": "none",
+        "proposed_action": None,
+        "order": None,
+        "rationale": ["LLM not configured -- returning deterministic stub."],
+    }
+
+
+# ── Streaming runner (SSE-friendly) ─────────────────────────────────────
+
+_NODE_ORDER = ["research", "risk", "portfolio"]
+_NODE_LABEL = {
+    "research": "Research agent -- gathering data, forming a thesis",
+    "risk": "Risk agent -- sizing and veto check",
+    "portfolio": "Portfolio agent -- drafting the proposal",
+}
+
+
+def _node_summary(node: str, state: dict) -> str:
+    """One human line per finished node for the live console."""
+    if node == "research":
+        bits = ["direction: {}".format(state.get("direction", "none"))]
+        sig = ((state.get("market") or {}).get("technical") or {}).get("signal") or {}
+        if sig.get("label"):
+            bits.append("technical: {} ({:+d})".format(sig["label"], sig.get("score", 0)))
+        thesis = (state.get("thesis") or "").strip()
+        if thesis:
+            bits.append(thesis[:140] + ("..." if len(thesis) > 140 else ""))
+        return " | ".join(bits)
+    if node == "risk":
+        risk = state.get("risk") or {}
+        if state.get("vetoed"):
+            return "VETO -- {}".format(risk.get("reason", "risk veto"))
+        return "approved | suggested risk {}%".format(risk.get("suggested_risk_pct", "?"))
+    order = state.get("order")
+    if order:
+        return "{} {} {} (~${:,.0f}) -> approval queue".format(
+            order["side"].upper(), order["qty"], order["symbol"], order["est_notional"])
+    return state.get("proposed_action") or "no action"
+
+
+def _final_payload(run_id: str, symbol: str, state: dict) -> dict:
+    return {
+        "run_id": run_id,
+        "symbol": symbol,
+        "thesis": state.get("thesis", ""),
+        "direction": state.get("direction", "none"),
+        "proposed_action": state.get("proposed_action"),
+        "order": state.get("order"),
+        "rationale": [r for r in state.get("rationale", []) if r],
+    }
+
+
+async def run_research_stream(symbol: str, question: str):
+    """Async generator: per-node progress events, then the final payload.
+
+    Same contract as run_research, delivered incrementally:
+        {"event": "step", "node", "status": "start"|"end", "label"/"summary", "run_id"}
+        {"event": "result", ...run_research dict...}
+    The REST endpoint keeps using run_research; this powers the SSE console.
+    """
+    run_id = "run_" + uuid.uuid4().hex[:8]
+    if not llm.is_configured():
+        yield {"event": "step", "node": "research", "status": "start",
+               "label": _NODE_LABEL["research"], "run_id": run_id}
+        yield {"event": "step", "node": "research", "status": "end",
+               "summary": "LLM not configured -- deterministic stub", "run_id": run_id}
+        yield {"event": "result", **_stub_payload(run_id, symbol)}
+        return
+
+    audit_log("agent.run.start", {"run_id": run_id, "symbol": symbol, "question": question})
+    state: AgentState = {"run_id": run_id, "symbol": symbol, "question": question}
+    merged: dict = dict(state)
+    yield {"event": "step", "node": "research", "status": "start",
+           "label": _NODE_LABEL["research"], "run_id": run_id}
+    async for chunk in _GRAPH.astream(state):
+        for node, delta in chunk.items():
+            if node not in _NODE_ORDER:
+                continue
+            merged.update(delta or {})
+            yield {"event": "step", "node": node, "status": "end",
+                   "summary": _node_summary(node, merged), "run_id": run_id}
+            nxt = _NODE_ORDER.index(node) + 1
+            if nxt < len(_NODE_ORDER):
+                yield {"event": "step", "node": _NODE_ORDER[nxt], "status": "start",
+                       "label": _NODE_LABEL[_NODE_ORDER[nxt]], "run_id": run_id}
+    audit_log("agent.run.end", {"run_id": run_id, "symbol": symbol,
+                                "direction": merged.get("direction", "none"),
+                                "has_order": merged.get("order") is not None})
+    yield {"event": "result", **_final_payload(run_id, symbol, merged)}
