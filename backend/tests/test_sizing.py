@@ -1,6 +1,15 @@
 """Order sizing: computed in code, never by the LLM — and notional-capped."""
 
+import pytest
+
+import app.agents.graph as graph
 from app.agents.graph import DEFAULT_NOTIONAL_USD, MAX_NOTIONAL_USD, _build_order
+
+
+@pytest.fixture(autouse=True)
+def flat_book(monkeypatch):
+    """Pure sizing math: no open positions from other tests' orders."""
+    monkeypatch.setattr(graph.orders_store, "list_orders", lambda: [])
 
 
 def _state(symbol: str, price: float, risk_pct: float = 1.0, direction: str = "long"):

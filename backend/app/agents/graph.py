@@ -29,6 +29,8 @@ from app.agents.tools import (
     get_quote_tool,
 )
 from app.core.audit import audit_log
+from app.execution import orders_store
+from app.execution.positions import _aggregate
 
 # Default notional per proposed trade (paper). Sizing stays in code, not the
 # LLM, so position sizes are always sane and auditable.
@@ -92,6 +94,38 @@ def _build_order(state: AgentState) -> dict | None:
         risk_pct = 1.0
     notional = DEFAULT_NOTIONAL_USD * (risk_pct / 1.0)
     symbol = state["symbol"]
+
+    # ── Deterministic sizing bands (code, never the LLM) ────────────────
+    # 1) Volatility band: scale size down as ATR% of price rises
+    #    (ai-hedge-fund-style vol-aware position limits).
+    sizing_notes: list[str] = []
+    tech = ((state.get("market") or {}).get("technical") or {}).get("latest") or {}
+    atr = tech.get("atr14")
+    if atr and price:
+        atr_pct = atr / price * 100.0
+        vol_mult = (1.0 if atr_pct < 3 else 0.75 if atr_pct < 6
+                    else 0.5 if atr_pct < 10 else 0.25)
+        if vol_mult < 1.0:
+            notional *= vol_mult
+            sizing_notes.append(
+                "Sizing: ATR is {:.1f}% of price -> {:g}x size (volatility band)."
+                .format(atr_pct, vol_mult))
+    # 2) Anti-pyramiding: adding to an existing same-direction position
+    #    halves the new tranche. (Opposite direction reduces/hedges — full.)
+    try:
+        existing = _aggregate(orders_store.list_orders()).get(symbol, {}).get("qty", 0.0)
+    except Exception:  # noqa: BLE001 -- sizing aids never block a proposal
+        existing = 0.0
+    same_dir = (direction == "long" and existing > 1e-9) or (
+        direction == "short" and existing < -1e-9)
+    if same_dir:
+        notional *= 0.5
+        sizing_notes.append(
+            "Sizing: already holding {:g} {} in this direction -> 0.5x size "
+            "(anti-pyramiding).".format(existing, symbol))
+    if sizing_notes:
+        state["rationale"] = (state.get("rationale") or []) + sizing_notes
+
     is_crypto = "/" in symbol or "-" in symbol
     qty = round(notional / price, 6) if is_crypto else max(1, round(notional / price))
     est_notional = round(qty * price, 2)
