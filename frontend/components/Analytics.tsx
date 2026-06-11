@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createChart, type IChartApi } from "lightweight-charts";
 
-const TABS = ["Signal", "Risk", "Backtest", "DCF", "Personas", "Options"] as const;
+const TABS = ["Signal", "Risk", "Backtest", "DCF", "Personas", "Options", "Screener"] as const;
 type Tab = (typeof TABS)[number];
 
 const dim = "#5c6773";
@@ -41,12 +41,20 @@ function KV({ rows }: { rows: [string, React.ReactNode][] }) {
   );
 }
 
-export default function Analytics({ symbol }: { symbol: string }) {
+export default function Analytics({
+  symbol,
+  onSelect,
+}: {
+  symbol: string;
+  onSelect?: (symbol: string) => void;
+}) {
   const [tab, setTab] = useState<Tab>("Signal");
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState(false);
   const [strategy, setStrategy] = useState("sma_cross");
   const [expiration, setExpiration] = useState<number | null>(null);
+  const [screen, setScreen] = useState("composite_bullish");
+  const [universe, setUniverse] = useState("sp100");
   // DCF inputs (billions for fcf/shares/debt keeps typing sane)
   const [dcf, setDcf] = useState({ fcf: 100, shares: 15, netDebt: 50, growth: 6, wacc: 9, tg: 2.5 });
 
@@ -85,10 +93,14 @@ export default function Analytics({ symbol }: { symbol: string }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ symbol, fundamentals: {} }),
         });
-      } else {
+      } else if (tab === "Options") {
         const exp = expiration ? `&expiration=${expiration}` : "";
         res = await fetch(
           `/api/analytics/options/chain?symbol=${encodeURIComponent(symbol)}&strikes_around=10${exp}`
+        );
+      } else {
+        res = await fetch(
+          `/api/analytics/screener?screen=${screen}&universe=${universe}&top=15`
         );
       }
       setData(await res.json());
@@ -97,7 +109,7 @@ export default function Analytics({ symbol }: { symbol: string }) {
     } finally {
       setBusy(false);
     }
-  }, [tab, symbol, strategy, dcf]);
+  }, [tab, symbol, strategy, dcf, screen, universe, expiration]);
 
   // Auto-run the cheap GET tabs when symbol/tab changes; POST tabs run on demand.
   useEffect(() => {
@@ -168,6 +180,73 @@ export default function Analytics({ symbol }: { symbol: string }) {
           ))}
           <button onClick={run} disabled={busy} style={runBtn}>{busy ? "valuing…" : "Value it"}</button>
         </div>
+      )}
+
+      {tab === "Screener" && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+          <select value={screen} onChange={(e) => setScreen(e.target.value)} style={selectStyle}>
+            <option value="composite_bullish">Composite bullish</option>
+            <option value="composite_bearish">Composite bearish</option>
+            <option value="rsi_oversold">RSI oversold</option>
+            <option value="rsi_overbought">RSI overbought</option>
+            <option value="uptrend">Uptrend</option>
+            <option value="big_gainers">Big gainers</option>
+            <option value="big_losers">Big losers</option>
+            <option value="near_52w_high">Near 52w high</option>
+            <option value="unusual_volume">Unusual volume</option>
+          </select>
+          <select value={universe} onChange={(e) => setUniverse(e.target.value)} style={selectStyle}>
+            <option value="sp100">S&P 100</option>
+            <option value="indices">Global indices</option>
+            <option value="fx">FX majors</option>
+            <option value="futures">Futures</option>
+            <option value="crypto">Crypto</option>
+          </select>
+          <button onClick={run} disabled={busy} style={runBtn}>
+            {busy ? "scanning…" : "Scan"}
+          </button>
+          {d.scanned !== undefined && (
+            <span style={{ color: dim }}>
+              {d.matches?.length ?? 0} hits / {d.scanned} scanned
+            </span>
+          )}
+        </div>
+      )}
+
+      {tab === "Screener" && Array.isArray(d.matches) && d.matches.length > 0 && (
+        <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%" }}>
+          <thead>
+            <tr style={{ color: dim, textAlign: "right" }}>
+              <th style={{ ...cell, textAlign: "left" }}>Symbol</th>
+              <th style={cell}>Price</th><th style={cell}>Day %</th>
+              <th style={cell}>RSI14</th><th style={cell}>RVOL</th>
+              <th style={cell}>% of 52w hi</th><th style={cell}>Signal</th>
+              <th style={{ ...cell, textAlign: "left" }}>Why</th>
+            </tr>
+          </thead>
+          <tbody style={{ textAlign: "right" }}>
+            {d.matches.map((m: any) => (
+              <tr
+                key={m.symbol}
+                onClick={() => onSelect?.(m.symbol)}
+                style={{ cursor: onSelect ? "pointer" : undefined }}
+                title="click to load in the terminal"
+              >
+                <td style={{ ...cell, textAlign: "left", color: blue }}>{m.symbol}</td>
+                <td style={cell}><Num v={m.price} /></td>
+                <td style={cell}><Num v={m.day_pct} suffix="%" colorize /></td>
+                <td style={cell}><Num v={m.rsi14} /></td>
+                <td style={cell}><Num v={m.rvol} /></td>
+                <td style={cell}><Num v={m.pct_of_52w_high} suffix="%" /></td>
+                <td style={cell}>{m.signal_score >= 0 ? `+${m.signal_score}` : m.signal_score}</td>
+                <td style={{ ...cell, textAlign: "left", color: dim }}>{(m.matched ?? []).join("; ")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {tab === "Screener" && Array.isArray(d.matches) && d.matches.length === 0 && d.scanned !== undefined && !busy && (
+        <p style={{ color: dim }}>no matches — try another screen or universe</p>
       )}
 
       {tab === "Personas" && !data && (

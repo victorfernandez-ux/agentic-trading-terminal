@@ -10,7 +10,15 @@ The research agent attaches the composite technical signal to its market evidenc
 fallback), backtest equity-curve chart + trade list in the Analytics panel, and options analytics —
 Yahoo chains via the cookie+crumb handshake (`app/data/options_chain.py`), clean-room Black-Scholes
 Greeks/IV (`app/analytics/options.py`, Hull-textbook-exact), `/analytics/options/*` endpoints, Options
-tab, `get_option_chain` agent tool. Option orders stay out of scope. Backend tests: 93.
+tab, `get_option_chain` agent tool. Option orders stay out of scope.
+**v1.4 (June 11, 2026, evening):** awareness/discovery layer from the deep-research pass (see RESEARCH.md):
+spark-batched watchlist quotes (1 request per <=20 symbols — was 1/symbol every 4s), global symbol search
+(`GET /market/search`) + SymbolSearch box + dynamic localStorage watchlist with remove, per-symbol news
+(`app/data/news.py`, Yahoo RSS keyless, 5-min cache; `GET /market/news`; News panel; research_node attaches
+top-5 headlines as evidence), and a market screener (`app/analytics/screener.py`: 9 conditions, SP100/indices/
+fx/futures/crypto universes in `app/data/universe.py`, 15-min bar cache + Semaphore(4) rate-limit discipline,
+`GET /analytics/screener`, Screener tab with click-to-load, `run_screener` + `get_news` agent tools).
+Backend tests: 111.
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---

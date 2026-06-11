@@ -15,13 +15,14 @@ type Props = {
   selected: string;
   onSelect: (s: string) => void;
   onQuotes?: (quotes: Record<string, Quote>) => void; // lets the chart header share live data
+  onRemove?: (s: string) => void;
 };
 
 /**
  * Live watchlist: streams quotes over /ws/quotes (every few seconds) and
  * falls back to polling REST /api/market/quote if the socket can't connect.
  */
-export default function Watchlist({ symbols, selected, onSelect, onQuotes }: Props) {
+export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRemove }: Props) {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [mode, setMode] = useState<"connecting" | "live" | "poll">("connecting");
   const onQuotesRef = useRef(onQuotes);
@@ -127,7 +128,18 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes }: Pro
               fontSize: 13,
             }}
           >
-            <span>{s}</span>
+            <span>
+              {s}
+              {onRemove && (
+                <span
+                  onClick={(e) => { e.stopPropagation(); onRemove(s); }}
+                  title="remove"
+                  style={{ marginLeft: 6, color: "#3a4356", cursor: "pointer", fontSize: 11 }}
+                >
+                  ×
+                </span>
+              )}
+            </span>
             <span style={{ textAlign: "right", fontSize: 11, lineHeight: 1.3 }}>
               <span style={{ display: "block", color: "#d6deeb" }}>
                 {q?.price != null ? q.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}

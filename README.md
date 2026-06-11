@@ -9,8 +9,12 @@ AI agents research and prepare trades for crypto and US equities; **a human appr
 **Status:** MVP shipped (Phases 0–3 of the roadmap: data, UI, agent loop, execution + approval + audit), plus
 Phase 1's live streaming, a five-module **analytics suite** (indicators/signal, risk metrics, backtesting,
 DCF valuation, investor personas — FinceptTerminal-inspired, implemented from scratch), **live SSE agent
-streaming** in the console, a **backtest equity-curve UI**, and **options analytics** (Yahoo chains via
-cookie+crumb, clean-room Black-Scholes Greeks + implied vol). Next up: hardening (DB sessions, Alembic), auth.
+streaming** in the console, a **backtest equity-curve UI**, **options analytics** (Yahoo chains via
+cookie+crumb, clean-room Black-Scholes Greeks + implied vol), and the v1.4 **awareness/discovery layer**:
+global symbol search (40+ exchanges, FX, indices, futures) with a dynamic watchlist, per-symbol news
+wired into the research agent's evidence, a 9-screen market screener over S&P-100/FX/crypto/futures
+universes, and spark-batched quotes (~20x fewer Yahoo calls). Research notes: [RESEARCH.md](./RESEARCH.md).
+Next up: alerts engine, agent evidence fan-out + bull/bear debate, hardening, auth.
 
 > Paper-trading only. No autonomous money movement. Every order is human-approved. State persists to a local
 > SQLite DB (or Postgres if configured).
@@ -37,30 +41,35 @@ npm run dev
 
 ## Use it
 
-1. Watchlist streams live prices + % change over WebSocket (`/ws/quotes`; REST polling fallback).
-   Pick a symbol → live candles render in Chart, with the streaming price in the header.
+1. Search any market (top of the watchlist) — equities on 40+ exchanges, crypto, FX (`EURUSD=X`),
+   indices (`^N225`), futures (`GC=F`) — and build your own watchlist (persisted locally). Quotes
+   stream over WebSocket in one batched request (`/ws/quotes`; REST polling fallback).
 2. Agent Console → "Run agents" → watch research/risk/portfolio steps stream in live (SSE); the loop
    produces a thesis and, if there's an edge, an order.
 3. Approval Queue → Approve → paper fill.
 4. Positions & P&L → the filled position appears with live unrealized P&L.
 5. Every decision is persisted to the audit log: `GET /audit` to query,
    `GET /audit/replay/{run_id}` to replay one agent run end-to-end.
-6. Analytics panel (bottom) → five tabs for the selected symbol:
+6. News panel: latest headlines for the selected symbol — the same items the research agent reads.
+7. Analytics panel (bottom) → seven tabs for the selected symbol:
    **Signal** (SMA/EMA/RSI/MACD/Bollinger/ATR + composite vote), **Risk** (Sharpe, Sortino, VaR/CVaR,
    max drawdown, beta/alpha vs SPY), **Backtest** (SMA cross · RSI reversion · buy-hold, fee-aware,
    no-lookahead), **DCF** (fair value + WACC×growth sensitivity), **Personas** (Buffett, Graham, Lynch,
    Munger, Marks — rule-based scoring + consensus), **Options** (chain around ATM with per-contract
-   Greeks from chain IV; nearest expiration by default). Backtest renders the equity curve + trade list.
-   Same engines power the agent tools (`get_indicators`, `get_risk_metrics`, `run_backtest`,
-   `consult_personas`, `get_option_chain`), so the research agent cites them as evidence.
+   Greeks from chain IV), **Screener** (9 screens — RSI extremes, uptrend, movers, 52w-high proximity,
+   unusual volume, composite signal — over S&P 100 / indices / FX / futures / crypto; click a hit to
+   load it). Backtest renders the equity curve + trade list. Same engines power the agent tools
+   (`get_indicators`, `get_risk_metrics`, `run_backtest`, `consult_personas`, `get_option_chain`,
+   `get_news`, `run_screener`), so the research agent cites them as evidence.
 
 ## Test
 
-From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (93 passing: health, approval gate +
+From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (111 passing: health, approval gate +
 double-approve race, persistence, audit log + replay, order-sizing notional cap, WebSocket streaming,
 SSE agent-stream sequence, the analytics suite — indicator math, risk metrics, backtester
-no-lookahead/fees, DCF closed-form checks, persona scoring — and options: Hull textbook values,
-put-call parity, IV round-trip, chain endpoint over a fake provider)
+no-lookahead/fees, DCF closed-form checks, persona scoring, options (Hull textbook values, put-call
+parity, IV round-trip), spark batch quotes, symbol search, news parse/cache, and screener conditions
+over crafted universes)
 
 ## Layout
 

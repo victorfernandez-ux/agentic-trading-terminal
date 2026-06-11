@@ -6,11 +6,14 @@ You are working on the **Agentic Trading Terminal** in this folder. Read `CLAUDE
 (current state, gotchas) and `PROJECT_PLAN.md` (vision) first, then execute the development plan below
 **in order**. When you finish a cycle, update `HANDOFF.md` and rewrite this file for the next one.
 
-## Context (June 11, 2026 — v1.3)
+## Context (June 11, 2026 — v1.4)
 
-Everything through v1.2 plus: **SSE agent streaming** (live per-node console), **backtest UI**
-(equity curve + trade list), **options analytics** (Yahoo chains w/ cookie+crumb, clean-room BSM
-Greeks + IV, Options tab, `get_option_chain` tool). Backend tests: **93 passing**, CI green.
+Everything through v1.3 (SSE agent streaming, backtest UI, options analytics) plus the v1.4
+awareness/discovery layer: spark-batched quotes, global symbol search + dynamic watchlist,
+per-symbol news as agent evidence, 9-screen market screener over named universes. Backend
+tests: **111 passing**, CI green. Read RESEARCH.md — verified data-source matrix + ranked
+agentic patterns (evidence fan-out, deterministic sizing bands, 1-round bull/bear debate,
+audit-log reflection memory, scan→research loop).
 
 Stack: FastAPI + LangGraph (`backend/app/`), Next.js + Lightweight Charts (`frontend/`), SQLite default,
 Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired* (AGPL) — clean-room only.
@@ -24,18 +27,26 @@ Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired*
 
 ## Development plan (do in order; each item: tests green → commit → next)
 
-1. **Hardening.** Per-request DB session scope (replace any in-process store reads), Alembic
-   migrations (SQLite now, Postgres-ready), consistent error envelopes across API routes.
+1. **Alerts engine** (research: the stickiest retail feature; design in RESEARCH.md/session log).
+   SQLite rules table (price cross / pct move / RSI / composite flip), evaluated on the existing
+   4s quote loop + 60s indicator tier, crossing semantics with last_state, cooldowns + auto-pause,
+   fired events to audit_log, push over /ws/quotes frames (type:"alert") + REST backfill. Tests.
+
+2. **Agent evidence fan-out + 1-round bull/bear debate.** Parallel tool nodes (technical, risk
+   metrics, personas, news) writing structured evidence; then bull → bear → judge (judge must
+   commit, anti-hold instruction; cheap model for debaters if configured). Keep run_research
+   contract + SSE steps. Tests with scripted LLM.
+
+3. **Deterministic sizing bands.** Vol-scaled position limits + correlation multiplier vs open
+   positions in `_build_order` (ai-hedge-fund pattern), under the existing notional cap. Tests.
+
+4. **Hardening.** Per-request DB session scope, Alembic migrations, consistent error envelopes.
    No behavior changes — tests prove parity.
 
-2. **Auth + multi-portfolio groundwork.** Single-user token auth; a `Portfolio` entity; scope
-   orders/positions/audit by portfolio id with a default portfolio preserving current behavior.
-   Live trading remains `NotImplementedError` regardless of auth.
+5. **Auth + multi-portfolio groundwork.** Single-user token auth; `Portfolio` entity; default
+   portfolio preserves behavior. Live trading remains `NotImplementedError`.
 
-3. **Options depth (optional, after 1–2).** IV smile view per expiration; simple strategy P&L
-   diagrams (long call/put, covered call, vertical) as pure analytics. Still no option orders.
-
-4. **Docs sync.** Update README/HANDOFF, rewrite this meta prompt.
+6. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
 
 ## Working rules
 
