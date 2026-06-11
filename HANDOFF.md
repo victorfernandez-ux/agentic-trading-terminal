@@ -5,7 +5,12 @@ analytics suite (v1.2): indicators/signal, risk metrics, backtesting engine, DCF
 agents — five capabilities adapted from FinceptTerminal's feature set (github.com/Fincept-Corporation/FinceptTerminal),
 implemented from scratch in `backend/app/analytics/` (FinceptTerminal is AGPL-3.0; no code was copied).
 Exposed as `/analytics/*` endpoints, agent tools in `app/agents/tools.py`, and the frontend Analytics panel.
-The research agent now attaches the composite technical signal to its market evidence. Backend tests: 78.
+The research agent attaches the composite technical signal to its market evidence.
+**v1.3 (June 11, 2026):** SSE agent streaming (`GET /agents/propose/stream` + live console steps with REST
+fallback), backtest equity-curve chart + trade list in the Analytics panel, and options analytics —
+Yahoo chains via the cookie+crumb handshake (`app/data/options_chain.py`), clean-room Black-Scholes
+Greeks/IV (`app/analytics/options.py`, Hull-textbook-exact), `/analytics/options/*` endpoints, Options
+tab, `get_option_chain` agent tool. Option orders stay out of scope. Backend tests: 93.
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---

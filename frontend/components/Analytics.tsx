@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createChart, type IChartApi } from "lightweight-charts";
 
-const TABS = ["Signal", "Risk", "Backtest", "DCF", "Personas"] as const;
+const TABS = ["Signal", "Risk", "Backtest", "DCF", "Personas", "Options"] as const;
 type Tab = (typeof TABS)[number];
 
 const dim = "#5c6773";
@@ -46,6 +46,7 @@ export default function Analytics({ symbol }: { symbol: string }) {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState(false);
   const [strategy, setStrategy] = useState("sma_cross");
+  const [expiration, setExpiration] = useState<number | null>(null);
   // DCF inputs (billions for fcf/shares/debt keeps typing sane)
   const [dcf, setDcf] = useState({ fcf: 100, shares: 15, netDebt: 50, growth: 6, wacc: 9, tg: 2.5 });
 
@@ -78,12 +79,17 @@ export default function Analytics({ symbol }: { symbol: string }) {
             terminal_growth: dcf.tg / 100,
           }),
         });
-      } else {
+      } else if (tab === "Personas") {
         res = await fetch(`/api/analytics/personas`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ symbol, fundamentals: {} }),
         });
+      } else {
+        const exp = expiration ? `&expiration=${expiration}` : "";
+        res = await fetch(
+          `/api/analytics/options/chain?symbol=${encodeURIComponent(symbol)}&strikes_around=10${exp}`
+        );
       }
       setData(await res.json());
     } catch {
@@ -96,9 +102,10 @@ export default function Analytics({ symbol }: { symbol: string }) {
   // Auto-run the cheap GET tabs when symbol/tab changes; POST tabs run on demand.
   useEffect(() => {
     setData(null);
-    if (tab === "Signal" || tab === "Risk") void run();
+    if (tab !== "Options") setExpiration(null);
+    if (tab === "Signal" || tab === "Risk" || tab === "Options") void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, symbol]);
+  }, [tab, symbol, expiration]);
 
   const d = (data ?? {}) as Record<string, any>;
 
@@ -253,6 +260,63 @@ export default function Analytics({ symbol }: { symbol: string }) {
             ["PV explicit / equity", <span key="5"><Num v={d.pv_explicit && d.pv_explicit / 1e9} suffix="B" /> / <Num v={d.equity_value && d.equity_value / 1e9} suffix="B" /></span>],
           ]}
         />
+      )}
+
+      {tab === "Options" && d.calls && (
+        <div style={{ fontSize: 12 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8 }}>
+            <span style={{ color: dim }}>
+              spot <b style={{ color: "#d6deeb" }}><Num v={d.spot} /></b>
+            </span>
+            <select
+              value={d.expiration ?? ""}
+              onChange={(e) => setExpiration(Number(e.target.value))}
+              style={selectStyle}
+            >
+              {(d.expirations ?? []).map((x: number) => (
+                <option key={x} value={x}>
+                  exp {new Date(x * 1000).toISOString().slice(0, 10)}
+                </option>
+              ))}
+            </select>
+            <span style={{ color: dim }}>T = {d.t_years} y · Greeks from chain IV</span>
+          </div>
+          <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%" }}>
+            <thead>
+              <tr style={{ color: dim, textAlign: "right" }}>
+                <th style={cell}>C bid/ask</th><th style={cell}>C IV</th>
+                <th style={cell}>C Δ</th><th style={cell}>OI</th>
+                <th style={{ ...cell, textAlign: "center", color: blue }}>Strike</th>
+                <th style={cell}>OI</th><th style={cell}>P Δ</th>
+                <th style={cell}>P IV</th><th style={cell}>P bid/ask</th>
+              </tr>
+            </thead>
+            <tbody style={{ textAlign: "right" }}>
+              {(d.calls ?? []).map((c: any, i: number) => {
+                const p = (d.puts ?? []).find((x: any) => x.strike === c.strike) ?? {};
+                const atm = Math.abs(c.strike - d.spot) ===
+                  Math.min(...(d.calls ?? []).map((x: any) => Math.abs(x.strike - d.spot)));
+                return (
+                  <tr key={i} style={{ background: atm ? "#16203a" : undefined }}>
+                    <td style={{ ...cell, color: c.itm ? green : undefined }}>
+                      {c.bid ?? "—"}/{c.ask ?? "—"}
+                    </td>
+                    <td style={cell}>{c.iv ? (c.iv * 100).toFixed(1) + "%" : "—"}</td>
+                    <td style={cell}>{c.delta ?? "—"}</td>
+                    <td style={cell}>{c.oi ?? "—"}</td>
+                    <td style={{ ...cell, textAlign: "center", color: blue }}>{c.strike}</td>
+                    <td style={cell}>{p.oi ?? "—"}</td>
+                    <td style={cell}>{p.delta ?? "—"}</td>
+                    <td style={cell}>{p.iv ? (p.iv * 100).toFixed(1) + "%" : "—"}</td>
+                    <td style={{ ...cell, color: p.itm ? green : undefined }}>
+                      {p.bid ?? "—"}/{p.ask ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {tab === "Personas" && d.consensus && (

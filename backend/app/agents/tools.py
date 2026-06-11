@@ -13,6 +13,7 @@ from app.analytics.backtest import run_backtest as _run_backtest
 from app.analytics.personas import consult_personas as _consult_personas
 from app.analytics.risk import compute_risk as _compute_risk
 from app.analytics.technical import compute_indicators as _compute_indicators
+from app.data.options_chain import fetch_chain
 from app.data.providers import _is_crypto, get_provider
 
 
@@ -73,6 +74,21 @@ async def consult_personas_tool(symbol: str, fundamentals: dict | None = None,
     return {"symbol": symbol, **_consult_personas(bars, fundamentals)}
 
 
+async def get_option_chain_tool(symbol: str, expiration: int | None = None) -> dict:
+    """Tool: compact option chain (8 strikes around ATM) as research evidence."""
+    chain = await fetch_chain(symbol, expiration)
+    spot = chain.get("spot") or 0
+    for kind in ("calls", "puts"):
+        rows = chain.get(kind, [])
+        rows.sort(key=lambda r: abs((r.get("strike") or 0) - spot))
+        keep = rows[:8]
+        keep.sort(key=lambda r: r.get("strike") or 0)
+        chain[kind] = [{k: r.get(k) for k in ("strike", "last", "iv", "oi", "itm")}
+                       for r in keep]
+    chain["expirations"] = chain.get("expirations", [])[:6]
+    return chain
+
+
 # Registry consumed by the LangGraph nodes in Phase 2.
 TOOLS = {
     "get_quote": get_quote_tool,
@@ -81,4 +97,5 @@ TOOLS = {
     "get_risk_metrics": get_risk_tool,
     "run_backtest": run_backtest_tool,
     "consult_personas": consult_personas_tool,
+    "get_option_chain": get_option_chain_tool,
 }

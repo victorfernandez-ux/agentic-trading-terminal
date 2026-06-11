@@ -7,9 +7,10 @@ AI agents research and prepare trades for crypto and US equities; **a human appr
 **[HANDOFF.md](./HANDOFF.md)** for current status, decisions, and known issues.
 
 **Status:** MVP shipped (Phases 0–3 of the roadmap: data, UI, agent loop, execution + approval + audit), plus
-Phase 1's live streaming and a five-module **analytics suite** (indicators/signal, risk metrics, backtesting,
-DCF valuation, investor personas — capabilities inspired by FinceptTerminal's feature set, implemented from
-scratch). `/health` reports `build: phase3`. Next up: rest of Phase 4 (options via Tradier, QuantLib Greeks).
+Phase 1's live streaming, a five-module **analytics suite** (indicators/signal, risk metrics, backtesting,
+DCF valuation, investor personas — FinceptTerminal-inspired, implemented from scratch), **live SSE agent
+streaming** in the console, a **backtest equity-curve UI**, and **options analytics** (Yahoo chains via
+cookie+crumb, clean-room Black-Scholes Greeks + implied vol). Next up: hardening (DB sessions, Alembic), auth.
 
 > Paper-trading only. No autonomous money movement. Every order is human-approved. State persists to a local
 > SQLite DB (or Postgres if configured).
@@ -38,7 +39,8 @@ npm run dev
 
 1. Watchlist streams live prices + % change over WebSocket (`/ws/quotes`; REST polling fallback).
    Pick a symbol → live candles render in Chart, with the streaming price in the header.
-2. Agent Console → "Run agents" → research/risk/portfolio produce a thesis and, if there's an edge, an order.
+2. Agent Console → "Run agents" → watch research/risk/portfolio steps stream in live (SSE); the loop
+   produces a thesis and, if there's an edge, an order.
 3. Approval Queue → Approve → paper fill.
 4. Positions & P&L → the filled position appears with live unrealized P&L.
 5. Every decision is persisted to the audit log: `GET /audit` to query,
@@ -47,16 +49,18 @@ npm run dev
    **Signal** (SMA/EMA/RSI/MACD/Bollinger/ATR + composite vote), **Risk** (Sharpe, Sortino, VaR/CVaR,
    max drawdown, beta/alpha vs SPY), **Backtest** (SMA cross · RSI reversion · buy-hold, fee-aware,
    no-lookahead), **DCF** (fair value + WACC×growth sensitivity), **Personas** (Buffett, Graham, Lynch,
-   Munger, Marks — rule-based scoring + consensus). Same engines power the agent tools
-   (`get_indicators`, `get_risk_metrics`, `run_backtest`, `consult_personas`), so the research agent
-   cites the technical signal as evidence in its thesis.
+   Munger, Marks — rule-based scoring + consensus), **Options** (chain around ATM with per-contract
+   Greeks from chain IV; nearest expiration by default). Backtest renders the equity curve + trade list.
+   Same engines power the agent tools (`get_indicators`, `get_risk_metrics`, `run_backtest`,
+   `consult_personas`, `get_option_chain`), so the research agent cites them as evidence.
 
 ## Test
 
-From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (78 passing: health, approval gate +
+From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (93 passing: health, approval gate +
 double-approve race, persistence, audit log + replay, order-sizing notional cap, WebSocket streaming,
-and the analytics suite — indicator math, risk metrics, backtester no-lookahead/fees, DCF closed-form
-checks, persona scoring, /analytics endpoints over a fake provider)
+SSE agent-stream sequence, the analytics suite — indicator math, risk metrics, backtester
+no-lookahead/fees, DCF closed-form checks, persona scoring — and options: Hull textbook values,
+put-call parity, IV round-trip, chain endpoint over a fake provider)
 
 ## Layout
 

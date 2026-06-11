@@ -8,15 +8,18 @@ endpoints (DCF) validate inputs and return 400 on bad parameters.
 from __future__ import annotations
 
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.analytics.backtest import STRATEGIES, run_backtest
+from app.analytics.options import bs_price_greeks, implied_vol
 from app.analytics.personas import consult_personas
 from app.analytics.risk import compute_risk
 from app.analytics.technical import compute_indicators
 from app.analytics.valuation import dcf_valuation
+from app.data.options_chain import fetch_chain
 from app.data.providers import _is_crypto, get_provider
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -139,3 +142,87 @@ async def personas(req: PersonasRequest) -> dict:
     except Exception as e:  # noqa: BLE001
         log.warning("personas failed for %s: %s", req.symbol, e)
         return {"symbol": req.symbol, "error": f"{type(e).__name__}: {str(e)[:160]}"}
+
+
+def _enrich_chain_greeks(chain: dict, rate: float) -> dict:
+    """Attach BSM delta/gamma/theta per contract using the chain's own IV."""
+    spot = chain.get("spot")
+    exp = chain.get("expiration")
+    if not spot or not exp:
+        return chain
+    t_years = max((exp - time.time()) / (365.0 * 86400.0), 1.0 / (365 * 24))
+    chain["t_years"] = round(t_years, 4)
+    for kind in ("calls", "puts"):
+        for row in chain.get(kind, []):
+            iv, k = row.get("iv"), row.get("strike")
+            if iv and iv > 0 and k:
+                g = bs_price_greeks(spot, k, t_years, iv, rate=rate,
+                                    kind="call" if kind == "calls" else "put")
+                row.update({"delta": g["delta"], "gamma": g["gamma"],
+                            "theta": g["theta"], "bs_price": g["price"]})
+    return chain
+
+
+@router.get("/options/chain")
+async def options_chain(
+    symbol: str,
+    expiration: int | None = None,
+    strikes_around: int = 12,
+    rate: float = 0.045,
+) -> dict:
+    """Option chain (nearest expiration by default) with per-contract Greeks."""
+    if _is_crypto(symbol):
+        return {"symbol": symbol, "error": "options: listed equities/ETFs only"}
+    try:
+        chain = await fetch_chain(symbol, expiration)
+        chain = _enrich_chain_greeks(chain, rate)
+        spot = chain.get("spot") or 0
+        if spot and strikes_around > 0:
+            for kind in ("calls", "puts"):
+                rows = chain.get(kind, [])
+                rows.sort(key=lambda r: abs((r.get("strike") or 0) - spot))
+                keep = rows[:strikes_around]
+                keep.sort(key=lambda r: r.get("strike") or 0)
+                chain[kind] = keep
+        return chain
+    except Exception as e:  # noqa: BLE001
+        log.warning("options chain failed for %s: %s", symbol, e)
+        return {"symbol": symbol, "error": f"{type(e).__name__}: {str(e)[:160]}"}
+
+
+class OptionPriceRequest(BaseModel):
+    symbol: str | None = None
+    spot: float | None = Field(default=None, gt=0)
+    strike: float = Field(gt=0)
+    days: float = Field(gt=0, le=3650)
+    vol: float = Field(gt=0, le=5)
+    rate: float = Field(default=0.045, ge=-0.05, le=0.5)
+    div_yield: float = Field(default=0.0, ge=0, le=0.25)
+    kind: str = "call"
+    market_price: float | None = Field(default=None, gt=0)
+
+
+@router.post("/options/price")
+async def options_price(req: OptionPriceRequest) -> dict:
+    """BSM price + Greeks for explicit terms; spot auto-fetched from symbol."""
+    spot = req.spot
+    if spot is None and req.symbol:
+        try:
+            quote = await get_provider(req.symbol).get_quote(req.symbol)
+            spot = quote.get("price")
+        except Exception:  # noqa: BLE001
+            spot = None
+    if not spot:
+        raise HTTPException(400, "provide spot or a symbol with a live quote")
+    try:
+        out = bs_price_greeks(spot, req.strike, req.days / 365.0, req.vol,
+                              rate=req.rate, div_yield=req.div_yield, kind=req.kind)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    result = {"symbol": req.symbol, "spot": spot, "strike": req.strike,
+              "days": req.days, "vol": req.vol, **out}
+    if req.market_price:
+        result["implied_vol"] = implied_vol(req.market_price, spot, req.strike,
+                                            req.days / 365.0, rate=req.rate,
+                                            div_yield=req.div_yield, kind=req.kind)
+    return result
