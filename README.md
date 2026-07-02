@@ -46,8 +46,11 @@ npm run dev
 1. Search any market (top of the watchlist) — equities on 40+ exchanges, crypto, FX (`EURUSD=X`),
    indices (`^N225`), futures (`GC=F`) — and build your own watchlist (persisted locally). Quotes
    stream over WebSocket in one batched request (`/ws/quotes`; REST polling fallback).
-2. Agent Console → "Run agents" → watch research/risk/portfolio steps stream in live (SSE); the loop
-   produces a thesis and, if there's an edge, an order.
+2. Agent Console → "Run agents" → watch research/debate/risk/portfolio steps stream in live (SSE).
+   Research fans out evidence gathering in parallel (technical, risk metrics, personas, news); a
+   one-round bull-vs-bear debate follows and a judge commits the direction (anti-hold) — the console
+   shows both cases, so the approver always sees the best argument against. If there's an edge, an
+   order is drafted.
 3. Approval Queue → Approve → paper fill.
 4. Positions & P&L → the filled position appears with live unrealized P&L.
 5. Every decision is persisted to the audit log: `GET /audit` to query,
@@ -66,12 +69,13 @@ npm run dev
 
 ## Test
 
-From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (130 passing: health, approval gate +
+From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (139 passing: health, approval gate +
 double-approve race, persistence, audit log + replay, order-sizing notional cap, WebSocket streaming,
-SSE agent-stream sequence, the analytics suite — indicator math, risk metrics, backtester
-no-lookahead/fees, DCF closed-form checks, persona scoring, options (Hull textbook values, put-call
-parity, IV round-trip), spark batch quotes, symbol search, news parse/cache, screener conditions
-over crafted universes, alert crossing/cooldown/push semantics, and sizing bands)
+SSE agent-stream sequence, evidence fan-out + bull/bear debate (scripted LLM), the analytics suite —
+indicator math, risk metrics, backtester no-lookahead/fees, DCF closed-form checks, persona scoring,
+options (Hull textbook values, put-call parity, IV round-trip), spark batch quotes, symbol search,
+news parse/cache, screener conditions over crafted universes, alert crossing/cooldown/push semantics,
+and sizing bands)
 
 ## Layout
 

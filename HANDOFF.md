@@ -26,6 +26,17 @@ self-pause, fired events -> audit_log + ring buffer -> {type:'alert'} WS frames 
 backfill, /alerts CRUD, Alerts panel (create/pause/re-arm/delete, live state). Plus deterministic sizing
 bands in `_build_order`: ATR%% volatility multiplier (1/0.75/0.5/0.25x) and 0.5x anti-pyramiding on
 same-direction adds, with rationale lines. Backend tests: 130.
+**v1.6 (July 2, 2026):** evidence fan-out + 1-round bull/bear debate (META_PROMPT item 1, TradingAgents
+pattern from RESEARCH.md). Graph is now research → debate → risk → portfolio: research_node gathers ALL
+evidence via one `asyncio.gather` fan-out (quote+bars required and re-raised; technical, compact risk
+metrics, persona consensus, news guarded) with zero LLM tokens; debate_node runs bull → bear (sees the
+bull case) → judge, judge commits direction with an anti-hold instruction (invalid directions coerce to
+"none"). Debaters can run on a cheaper model via `LLM_MODEL_DEBATE` (unset -> primary model); the judge
+always uses `LLM_MODEL`. `llm.complete_json` gained a per-call `model=` override. Final payload + SSE
+gained a `debate` key ({bull, bear, verdict}); AgentConsole shows the ⚖️ debate step and renders both
+cases so the approver sees the best case AGAINST. New audit event `agent.debate`. run_research contract
+otherwise unchanged; sizing still 100%% in code. Backend tests: 139 (`tests/test_debate.py` + reworked
+fan-out/stream tests; all LLM calls scripted).
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---
@@ -70,7 +81,7 @@ Open http://localhost:3000.
 ```
 Browser (Next.js :3000) ──/api proxy──► FastAPI (:8000)
   Watchlist · Chart · Agent Console · Approval Queue · Positions       │
-                                                                       ├─ /agents/*  LangGraph: research→risk→portfolio
+                                                                       ├─ /agents/*  LangGraph: research→debate→risk→portfolio
                                                                        ├─ /orders/*  propose → approve(human) → paper fill
                                                                        ├─ /market/*  quotes/bars (symbol as QUERY param)
                                                                        └─ /health

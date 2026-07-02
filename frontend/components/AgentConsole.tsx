@@ -11,6 +11,11 @@ type Result = {
   symbol: string;
   thesis: string;
   direction?: string;
+  debate?: {
+    bull?: { case?: string };
+    bear?: { case?: string };
+    verdict?: { winner?: string };
+  } | null;
   proposed_action: string | null;
   order: Record<string, unknown> | null;
   order_id: string | null;
@@ -20,7 +25,12 @@ type Result = {
 
 type Step = { node: string; status: "start" | "end"; text: string };
 
-const NODE_ICON: Record<string, string> = { research: "🔎", risk: "🛡", portfolio: "📋" };
+const NODE_ICON: Record<string, string> = {
+  research: "🔎",
+  debate: "⚖️",
+  risk: "🛡",
+  portfolio: "📋",
+};
 
 export default function AgentConsole({
   symbol,
@@ -130,6 +140,17 @@ export default function AgentConsole({
             {result.symbol} · direction: {result.direction ?? "—"}
           </div>
           <p style={{ margin: "0 0 8px" }}>{result.thesis}</p>
+
+          {result.debate?.bull?.case && (
+            <div style={{ color: "#9aa5b1", margin: "0 0 4px" }}>
+              🐂 <b style={{ color: "#8fd694" }}>Bull</b> — {result.debate.bull.case}
+            </div>
+          )}
+          {result.debate?.bear?.case && (
+            <div style={{ color: "#9aa5b1", margin: "0 0 8px" }}>
+              🐻 <b style={{ color: "#f7768e" }}>Bear</b> — {result.debate.bear.case}
+            </div>
+          )}
 
           {result.proposed_action ? (
             <div style={tag("#8fd694")}>📋 {result.proposed_action}</div>

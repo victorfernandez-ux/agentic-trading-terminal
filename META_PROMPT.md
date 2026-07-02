@@ -6,16 +6,17 @@ You are working on the **Agentic Trading Terminal** in this folder. Read `CLAUDE
 (current state, gotchas) and `PROJECT_PLAN.md` (vision) first, then execute the development plan below
 **in order**. When you finish a cycle, update `HANDOFF.md` and rewrite this file for the next one.
 
-## Context (June 11, 2026 — v1.5)
+## Context (July 2, 2026 — v1.6)
 
-Everything through v1.3 (SSE agent streaming, backtest UI, options analytics) plus the v1.4
-awareness/discovery layer: spark-batched quotes, global symbol search + dynamic watchlist,
-per-symbol news as agent evidence, 9-screen market screener over named universes. Backend
-tests: **130 passing**, CI green. v1.5 added the
-alerts engine (server-side rules -> audit + WS push, Alerts panel) and deterministic sizing bands
-(ATR volatility multiplier + anti-pyramiding in _build_order). Read RESEARCH.md — verified data-source matrix + ranked
-agentic patterns (evidence fan-out, deterministic sizing bands, 1-round bull/bear debate,
-audit-log reflection memory, scan→research loop).
+Everything through v1.4 (SSE streaming, backtest UI, options analytics, discovery layer: batched
+quotes, symbol search + dynamic watchlist, news evidence, 9-screen screener) plus v1.5 (alerts
+engine with WS push + Alerts panel; deterministic sizing bands in _build_order) and v1.6: the
+agent graph is now **research → debate → risk → portfolio** — research is a parallel evidence
+fan-out (asyncio.gather: quote/bars required, technical/risk-metrics/personas/news guarded, zero
+LLM tokens), then a 1-round bull → bear → judge debate commits the direction (anti-hold; debaters
+optionally on a cheaper LLM_MODEL_DEBATE; `debate` key in the payload; AgentConsole shows both
+cases). Backend tests: **139 passing**. Read RESEARCH.md — verified data-source matrix + ranked
+agentic patterns (remaining: audit-log reflection memory, scan→research loop).
 
 Stack: FastAPI + LangGraph (`backend/app/`), Next.js + Lightweight Charts (`frontend/`), SQLite default,
 Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired* (AGPL) — clean-room only.
@@ -29,25 +30,20 @@ Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired*
 
 ## Development plan (do in order; each item: tests green → commit → next)
 
-1. **Agent evidence fan-out + 1-round bull/bear debate.** Parallel tool nodes (technical, risk
-   metrics, personas, news) writing structured evidence; then bull → bear → judge (judge must
-   commit, anti-hold instruction; cheap model for debaters if configured). Keep run_research
-   contract + SSE steps. Tests with scripted LLM.
-
-2. **Alert→research loop.** Optional per-alert flag: on fire, POST the hit into /agents/propose
+1. **Alert→research loop.** Optional per-alert flag: on fire, POST the hit into /agents/propose
    with a templated question (cap auto-runs/hour; proposals only — approval gate untouched). Tests.
 
-3. **Hardening.** Per-request DB session scope, Alembic migrations, consistent error envelopes.
+2. **Hardening.** Per-request DB session scope, Alembic migrations, consistent error envelopes.
    No behavior changes — tests prove parity.
 
-4. **Auth + multi-portfolio groundwork.** Single-user token auth; `Portfolio` entity; default
+3. **Auth + multi-portfolio groundwork.** Single-user token auth; `Portfolio` entity; default
    portfolio preserves behavior. Live trading remains `NotImplementedError`.
 
-5. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
+4. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
 
 ## Working rules
 
-- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (93+ green).
+- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (139+ green).
 - **Restart the backend after backend changes** — use repo-root `start-backend-logged.bat`
   (kills :8000 zombies incl. orphaned `--multiprocessing-fork` reload workers, logs to
   `.private\backend.log`). Hot-reload misfires on this synced folder.

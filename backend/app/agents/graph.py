@@ -1,8 +1,11 @@
 """LangGraph agent engine.
 
-Graph:  research -> risk -> portfolio -> (proposal)
+Graph:  research -> debate -> risk -> portfolio -> (proposal)
 
-- research_node:  gathers data via tools and forms a directional thesis.
+- research_node:  parallel evidence fan-out (quote, trend, technical, risk
+                  metrics, personas, news) into structured state -- no LLM.
+- debate_node:    one round: bull argues FOR, bear rebuts, judge commits a
+                  direction (anti-hold). Debaters may use a cheaper model.
 - risk_node:      sizes the idea, flags risk, and may VETO.
 - portfolio_node: turns an approved idea into a concrete proposed action
                   AND a structured order draft (side/qty/type).
@@ -16,6 +19,7 @@ API and UI still work end-to-end offline.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import TypedDict
 
@@ -23,11 +27,14 @@ from langgraph.graph import END, START, StateGraph
 
 from app.agents import llm
 from app.agents.tools import (
+    consult_personas_tool,
     get_bars_tool,
     get_indicators_tool,
     get_news_tool,
     get_quote_tool,
+    get_risk_tool,
 )
+from app.config import settings
 from app.core.audit import audit_log
 from app.execution import orders_store
 from app.execution.positions import _aggregate
@@ -46,6 +53,7 @@ class AgentState(TypedDict, total=False):
     market: dict
     thesis: str
     direction: str  # long | short | none
+    debate: dict  # bull/bear cases + judge verdict (shown to the approver)
     risk: dict
     vetoed: bool
     proposed_action: str | None
@@ -152,39 +160,108 @@ def _build_order(state: AgentState) -> dict | None:
     }
 
 
+# Compact subset of risk-metric keys forwarded as debate evidence.
+_RISK_EVIDENCE_KEYS = ("total_return_pct", "cagr_pct", "sharpe", "sortino",
+                       "max_drawdown_pct", "var_95_pct", "win_rate_pct")
+
+
 async def research_node(state: AgentState) -> AgentState:
+    """Parallel evidence fan-out. Quote+bars are required; the rest (technical,
+    risk metrics, personas, news) are extra evidence and never break the run.
+    Zero LLM tokens here -- the thesis is formed by the debate node."""
     symbol = state["symbol"]
-    quote = await get_quote_tool(symbol)
-    bars = await get_bars_tool(symbol, timeframe="1D", limit=60)
+    quote, bars, ind, riskm, personas, news = await asyncio.gather(
+        get_quote_tool(symbol),
+        get_bars_tool(symbol, timeframe="1D", limit=60),
+        get_indicators_tool(symbol, timeframe="1D", limit=120),
+        get_risk_tool(symbol),
+        consult_personas_tool(symbol),
+        get_news_tool(symbol, limit=5),
+        return_exceptions=True,
+    )
+    for required in (quote, bars):
+        if isinstance(required, BaseException):
+            raise required
     state["market"] = {"quote": quote, "trend": _summarize_bars(bars.get("bars", []))}
-    try:  # technical signal is extra evidence, never a hard requirement
-        ind = await get_indicators_tool(symbol, timeframe="1D", limit=120)
+    if not isinstance(ind, BaseException):
         state["market"]["technical"] = {"latest": ind.get("latest"),
                                         "signal": ind.get("signal")}
-    except Exception:  # noqa: BLE001
-        pass
-    try:  # headlines: event/narrative evidence, same guarded pattern
-        news = await get_news_tool(symbol, limit=5)
+    if not isinstance(riskm, BaseException) and not riskm.get("error"):
+        state["market"]["risk_metrics"] = {k: riskm[k] for k in _RISK_EVIDENCE_KEYS
+                                           if k in riskm}
+    if not isinstance(personas, BaseException):
+        consensus = (personas.get("consensus") or {})
+        if consensus.get("verdict") not in (None, "INSUFFICIENT_DATA"):
+            state["market"]["personas"] = consensus
+    if not isinstance(news, BaseException):
         state["market"]["news"] = [h["title"] for h in news.get("headlines", [])]
-    except Exception:  # noqa: BLE001
-        pass
     audit_log("agent.research.data", {"run_id": state.get("run_id"), "symbol": symbol,
                                       "market": state["market"]})
+    return state
 
-    sys_prompt = (
-        "You are an equity/crypto research agent. Form a concise, falsifiable "
-        "directional thesis. Be explicit about uncertainty. Respond as JSON with "
-        "keys: thesis (string), direction ('long'|'short'|'none'), key_points (string[])."
+
+# The decision-quality lever (TradingAgents): the judge may not hide in "hold".
+_ANTI_HOLD = (
+    "You MUST commit to 'long' or 'short' whenever either side presents a "
+    "materially stronger case. 'none' is reserved for genuinely insufficient or "
+    "truly balanced evidence -- never use it as a default to avoid deciding."
+)
+
+
+async def debate_node(state: AgentState) -> AgentState:
+    """One-round bull/bear debate; a judge commits the direction and thesis.
+
+    Exactly one round -- more rounds add tokens, not decision quality
+    (RESEARCH.md). Debaters may run on a cheaper model (llm_model_debate);
+    the judge always uses the primary model.
+    """
+    symbol, question = state["symbol"], state["question"]
+    evidence = "Symbol: {sym}\nQuestion: {q}\nEvidence: {mkt}".format(
+        sym=symbol, q=question, mkt=state.get("market"))
+    debater_model = settings.llm_model_debate
+
+    bull = await llm.complete_json(
+        system=(
+            "You are the BULL analyst in a one-round trade debate. Argue the "
+            "strongest honest case FOR a long position, grounded strictly in the "
+            "evidence provided -- concede weaknesses rather than inventing data. "
+            "Respond as JSON with keys: case (string), points (string[])."
+        ),
+        user=evidence,
+        model=debater_model,
     )
-    user_prompt = (
-        "Symbol: {sym}\nQuestion: {q}\nMarket data: {mkt}\n"
-        "If data is unavailable, reason from general knowledge but say so."
-    ).format(sym=symbol, q=state["question"], mkt=state["market"])
-
-    out = await llm.complete_json(system=sys_prompt, user=user_prompt)
-    state["thesis"] = out.get("thesis", "")
-    state["direction"] = out.get("direction", "none")
-    state["rationale"] = list(out.get("key_points", []))
+    bear = await llm.complete_json(
+        system=(
+            "You are the BEAR analyst in a one-round trade debate. Rebut the bull "
+            "case point by point and argue the strongest honest case AGAINST a "
+            "long position (or for a short), grounded strictly in the evidence. "
+            "Respond as JSON with keys: case (string), points (string[])."
+        ),
+        user=evidence + "\nBull case: {}".format(bull),
+        model=debater_model,
+    )
+    judge = await llm.complete_json(
+        system=(
+            "You are the judge of a one-round bull/bear trade debate. Weigh "
+            "evidence quality, not rhetoric. " + _ANTI_HOLD + " If the bear "
+            "merely neutralizes the bull without independent downside edge, "
+            "'none' is acceptable; real downside edge means 'short'. Respond as "
+            "JSON with keys: direction ('long'|'short'|'none'), thesis (string), "
+            "key_points (string[]), winner ('bull'|'bear'|'neither')."
+        ),
+        user=evidence + "\nBull case: {b}\nBear case: {r}".format(b=bull, r=bear),
+    )
+    direction = judge.get("direction")
+    state["direction"] = direction if direction in ("long", "short") else "none"
+    state["thesis"] = judge.get("thesis", "")
+    state["rationale"] = list(judge.get("key_points", []))
+    state["debate"] = {
+        "bull": {"case": bull.get("case", ""), "points": list(bull.get("points", []))},
+        "bear": {"case": bear.get("case", ""), "points": list(bear.get("points", []))},
+        "verdict": {"winner": judge.get("winner"), "direction": state["direction"]},
+    }
+    audit_log("agent.debate", {"run_id": state.get("run_id"), "symbol": symbol,
+                               "debate": state["debate"]})
     return state
 
 
@@ -243,10 +320,12 @@ async def portfolio_node(state: AgentState) -> AgentState:
 def build_graph():
     g = StateGraph(AgentState)
     g.add_node("research", research_node)
+    g.add_node("debate", debate_node)
     g.add_node("risk", risk_node)
     g.add_node("portfolio", portfolio_node)
     g.add_edge(START, "research")
-    g.add_edge("research", "risk")
+    g.add_edge("research", "debate")
+    g.add_edge("debate", "risk")
     g.add_edge("risk", "portfolio")
     g.add_edge("portfolio", END)
     return g.compile()
@@ -272,6 +351,7 @@ async def run_research(symbol: str, question: str) -> dict:
         "symbol": symbol,
         "thesis": result.get("thesis", ""),
         "direction": result.get("direction", "none"),
+        "debate": result.get("debate"),
         "proposed_action": result.get("proposed_action"),
         "order": result.get("order"),
         "rationale": [r for r in result.get("rationale", []) if r],
@@ -287,6 +367,7 @@ def _stub_payload(run_id: str, symbol: str) -> dict:
             "the live research loop for {}.".format(symbol)
         ),
         "direction": "none",
+        "debate": None,
         "proposed_action": None,
         "order": None,
         "rationale": ["LLM not configured -- returning deterministic stub."],
@@ -295,9 +376,10 @@ def _stub_payload(run_id: str, symbol: str) -> dict:
 
 # ── Streaming runner (SSE-friendly) ─────────────────────────────────────
 
-_NODE_ORDER = ["research", "risk", "portfolio"]
+_NODE_ORDER = ["research", "debate", "risk", "portfolio"]
 _NODE_LABEL = {
-    "research": "Research agent -- gathering data, forming a thesis",
+    "research": "Research agent -- parallel evidence fan-out (quote, technical, risk, personas, news)",
+    "debate": "Debate -- bull vs bear, one round; judge commits",
     "risk": "Risk agent -- sizing and veto check",
     "portfolio": "Portfolio agent -- drafting the proposal",
 }
@@ -305,11 +387,23 @@ _NODE_LABEL = {
 
 def _node_summary(node: str, state: dict) -> str:
     """One human line per finished node for the live console."""
+    market = state.get("market") or {}
     if node == "research":
-        bits = ["direction: {}".format(state.get("direction", "none"))]
-        sig = ((state.get("market") or {}).get("technical") or {}).get("signal") or {}
+        bits = []
+        sig = (market.get("technical") or {}).get("signal") or {}
         if sig.get("label"):
             bits.append("technical: {} ({:+d})".format(sig["label"], sig.get("score", 0)))
+        personas = market.get("personas") or {}
+        if personas.get("verdict"):
+            bits.append("personas: {}".format(personas["verdict"]))
+        if "news" in market:
+            bits.append("news: {} headlines".format(len(market["news"])))
+        return " | ".join(bits) or "evidence gathered"
+    if node == "debate":
+        verdict = (state.get("debate") or {}).get("verdict") or {}
+        bits = ["direction: {}".format(state.get("direction", "none"))]
+        if verdict.get("winner"):
+            bits.append("winner: {}".format(verdict["winner"]))
         thesis = (state.get("thesis") or "").strip()
         if thesis:
             bits.append(thesis[:140] + ("..." if len(thesis) > 140 else ""))
@@ -332,6 +426,7 @@ def _final_payload(run_id: str, symbol: str, state: dict) -> dict:
         "symbol": symbol,
         "thesis": state.get("thesis", ""),
         "direction": state.get("direction", "none"),
+        "debate": state.get("debate"),
         "proposed_action": state.get("proposed_action"),
         "order": state.get("order"),
         "rationale": [r for r in state.get("rationale", []) if r],

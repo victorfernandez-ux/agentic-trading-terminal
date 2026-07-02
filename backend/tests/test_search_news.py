@@ -135,14 +135,17 @@ async def test_research_node_attaches_headlines(monkeypatch):
         return {"symbol": symbol, "headlines": [{"title": "Big headline",
                                                  "published": "now"}]}
 
-    async def fake_llm(system, user, **kw):
-        assert "Big headline" in user  # evidence reaches the prompt
-        return {"thesis": "t", "direction": "none", "key_points": []}
+    async def fake_risk_metrics(symbol, benchmark="SPY", timeframe="1D", limit=252):
+        return {"symbol": symbol, "sharpe": 1.0}
+
+    async def fake_personas(symbol, fundamentals=None, timeframe="1D", limit=252):
+        return {"symbol": symbol, "consensus": {"score": 50, "verdict": "NEUTRAL"}}
 
     monkeypatch.setattr(graph, "get_quote_tool", fake_quote)
     monkeypatch.setattr(graph, "get_bars_tool", fake_bars)
     monkeypatch.setattr(graph, "get_indicators_tool", fake_ind)
     monkeypatch.setattr(graph, "get_news_tool", fake_news)
-    monkeypatch.setattr(graph.llm, "complete_json", fake_llm)
+    monkeypatch.setattr(graph, "get_risk_tool", fake_risk_metrics)
+    monkeypatch.setattr(graph, "consult_personas_tool", fake_personas)
     out = await graph.research_node({"run_id": "r", "symbol": "AAPL", "question": "q"})
-    assert out["market"]["news"] == ["Big headline"]
+    assert out["market"]["news"] == ["Big headline"]  # evidence for the debate

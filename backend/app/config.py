@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     openrouter_api_key: str | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     llm_model: str = "deepseek/deepseek-v4-flash"
+    # Optional cheaper model for the bull/bear debaters; the judge always
+    # uses llm_model. Unset -> debaters use llm_model too.
+    llm_model_debate: str | None = None
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
 

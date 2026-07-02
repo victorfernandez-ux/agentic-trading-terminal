@@ -51,15 +51,17 @@ def is_configured() -> bool:
         return False
 
 
-async def complete_json(system: str, user: str, *, temperature: float = 0.2) -> dict:
+async def complete_json(system: str, user: str, *, temperature: float = 0.2,
+                        model: str | None = None) -> dict:
     """Call the model and parse a JSON object from the response.
 
     We instruct the model to return JSON and request response_format json
     when supported; we still defensively parse in case a model ignores it.
+    `model` overrides settings.llm_model per call (e.g. cheap debaters).
     """
     client = get_client()
     resp = await client.chat.completions.create(
-        model=settings.llm_model,
+        model=model or settings.llm_model,
         temperature=temperature,
         messages=[
             {"role": "system", "content": system},
