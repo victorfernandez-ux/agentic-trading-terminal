@@ -16,6 +16,7 @@ API and UI still work end-to-end offline.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import TypedDict
 
@@ -23,11 +24,14 @@ from langgraph.graph import END, START, StateGraph
 
 from app.agents import llm
 from app.agents.tools import (
+    consult_personas_tool,
     get_bars_tool,
     get_indicators_tool,
     get_news_tool,
     get_quote_tool,
+    get_risk_tool,
 )
+from app.config import settings
 from app.core.audit import audit_log
 from app.execution import orders_store
 from app.execution.positions import _aggregate
@@ -44,8 +48,10 @@ class AgentState(TypedDict, total=False):
     symbol: str
     question: str
     market: dict
+    evidence: dict  # structured fan-out evidence (technical/risk/personas/news)
     thesis: str
     direction: str  # long | short | none
+    debate: dict  # bull/bear cases + judge verdict (1-round)
     risk: dict
     vetoed: bool
     proposed_action: str | None
@@ -152,24 +158,71 @@ def _build_order(state: AgentState) -> dict | None:
     }
 
 
+async def _safe(coro):
+    """Await a coroutine, returning None on any failure.
+
+    Enrichment evidence (indicators/news/risk/personas) must never sink a run;
+    a missing stream just narrows the evidence the agents reason over.
+    """
+    try:
+        return await coro
+    except Exception:  # noqa: BLE001
+        return None
+
+
+async def _gather_market(symbol: str) -> dict:
+    """Base market context: quote + price-trend (required) plus guarded
+    technical/news enrichment. Quote/bars are awaited together (their failure
+    must surface — price is needed to size any order); enrichment is guarded."""
+    quote, bars = await asyncio.gather(
+        get_quote_tool(symbol),
+        get_bars_tool(symbol, timeframe="1D", limit=60),
+    )
+    market = {"quote": quote, "trend": _summarize_bars(bars.get("bars", []))}
+    ind, news = await asyncio.gather(
+        _safe(get_indicators_tool(symbol, timeframe="1D", limit=120)),
+        _safe(get_news_tool(symbol, limit=5)),
+    )
+    if ind:
+        market["technical"] = {"latest": ind.get("latest"), "signal": ind.get("signal")}
+    if news:
+        market["news"] = [h["title"] for h in news.get("headlines", [])]
+    return market
+
+
+async def evidence_node(state: AgentState) -> AgentState:
+    """Parallel evidence fan-out (no LLM tokens).
+
+    Runs the deterministic tool calls concurrently — base market plus risk
+    metrics and investor-persona scores — and assembles a structured
+    `evidence` dict the downstream LLM nodes reason over. The real win is
+    concurrent I/O: every stream is an independent network call.
+    """
+    symbol = state["symbol"]
+    market, risk_metrics, personas = await asyncio.gather(
+        _gather_market(symbol),
+        _safe(get_risk_tool(symbol)),
+        _safe(consult_personas_tool(symbol)),
+    )
+    state["market"] = market
+    state["evidence"] = {
+        "technical": market.get("technical"),
+        "news": market.get("news"),
+        "risk_metrics": risk_metrics,
+        "personas": personas,
+    }
+    gathered = [k for k, v in state["evidence"].items() if v]
+    audit_log("agent.evidence", {"run_id": state.get("run_id"), "symbol": symbol,
+                                 "gathered": gathered, "market": market})
+    return state
+
+
 async def research_node(state: AgentState) -> AgentState:
     symbol = state["symbol"]
-    quote = await get_quote_tool(symbol)
-    bars = await get_bars_tool(symbol, timeframe="1D", limit=60)
-    state["market"] = {"quote": quote, "trend": _summarize_bars(bars.get("bars", []))}
-    try:  # technical signal is extra evidence, never a hard requirement
-        ind = await get_indicators_tool(symbol, timeframe="1D", limit=120)
-        state["market"]["technical"] = {"latest": ind.get("latest"),
-                                        "signal": ind.get("signal")}
-    except Exception:  # noqa: BLE001
-        pass
-    try:  # headlines: event/narrative evidence, same guarded pattern
-        news = await get_news_tool(symbol, limit=5)
-        state["market"]["news"] = [h["title"] for h in news.get("headlines", [])]
-    except Exception:  # noqa: BLE001
-        pass
-    audit_log("agent.research.data", {"run_id": state.get("run_id"), "symbol": symbol,
-                                      "market": state["market"]})
+    if "market" not in state:  # standalone use (no evidence_node ahead of us)
+        state["market"] = await _gather_market(symbol)
+        audit_log("agent.research.data", {"run_id": state.get("run_id"),
+                                          "symbol": symbol, "market": state["market"]})
 
     sys_prompt = (
         "You are an equity/crypto research agent. Form a concise, falsifiable "
@@ -185,6 +238,69 @@ async def research_node(state: AgentState) -> AgentState:
     state["thesis"] = out.get("thesis", "")
     state["direction"] = out.get("direction", "none")
     state["rationale"] = list(out.get("key_points", []))
+    return state
+
+
+_DEBATE_CTX = (
+    "Symbol: {sym}\nResearch thesis: {thesis}\nResearch lean: {direction}\n"
+    "Evidence (technical signal, risk metrics, persona scores, headlines):\n{evidence}"
+)
+
+
+async def debate_node(state: AgentState) -> AgentState:
+    """One-round bull/bear debate, then a judge that must commit.
+
+    bull -> bear -> judge. The judge owns the final direction and is told NOT
+    to default to 'none'/hold out of caution. Cheap debater model + stronger
+    judge model if configured (settings.llm_debater_model / llm_judge_model).
+    Surfaces the strongest case AGAINST to the human approver via rationale.
+    """
+    symbol = state["symbol"]
+    ctx = _DEBATE_CTX.format(
+        sym=symbol, thesis=state.get("thesis", ""),
+        direction=state.get("direction", "none"), evidence=state.get("evidence") or {})
+    debater = settings.llm_debater_model
+    judge_model = settings.llm_judge_model
+
+    bull = await llm.complete_json(
+        system=("You are the BULL. Make the strongest evidence-grounded case to go "
+                "LONG this symbol. Respond as JSON: case (string), points (string[])."),
+        user=ctx, temperature=0.4, model=debater)
+    bear = await llm.complete_json(
+        system=("You are the BEAR. Make the strongest evidence-grounded case to go "
+                "SHORT or stay out. Respond as JSON: case (string), points (string[])."),
+        user=ctx, temperature=0.4, model=debater)
+    judge = await llm.complete_json(
+        system=("You are the JUDGE. Weigh the bull and bear cases and COMMIT to a "
+                "directional call. Prefer 'long' or 'short'; only choose 'none' if the "
+                "evidence is genuinely contradictory or absent. Do NOT default to "
+                "'none'/hold out of caution — an indecisive judge is a failed judge. "
+                "Respond as JSON: direction ('long'|'short'|'none'), rationale (string), "
+                "confidence (number 0-1)."),
+        user=ctx + "\n\nBULL: {}\n\nBEAR: {}".format(bull, bear),
+        temperature=0.1, model=judge_model)
+
+    decision = judge.get("direction")
+    if decision not in ("long", "short", "none"):
+        decision = state.get("direction", "none")
+    state["debate"] = {
+        "bull": bull.get("case", ""),
+        "bear": bear.get("case", ""),
+        "decision": decision,
+        "confidence": judge.get("confidence"),
+        "judge_rationale": judge.get("rationale", ""),
+    }
+    state["direction"] = decision
+
+    notes: list[str] = []
+    if bear.get("case"):  # always show the human the best case AGAINST
+        notes.append("Bear case: " + str(bear["case"])[:240])
+    jr = judge.get("rationale")
+    if jr:
+        notes.append("Judge ({}): {}".format(decision, str(jr)[:240]))
+    state["rationale"] = (state.get("rationale") or []) + notes
+    audit_log("agent.debate", {"run_id": state.get("run_id"), "symbol": symbol,
+                               "decision": decision, "debate": state["debate"]})
     return state
 
 
@@ -242,11 +358,15 @@ async def portfolio_node(state: AgentState) -> AgentState:
 
 def build_graph():
     g = StateGraph(AgentState)
+    g.add_node("evidence", evidence_node)
     g.add_node("research", research_node)
+    g.add_node("debate", debate_node)
     g.add_node("risk", risk_node)
     g.add_node("portfolio", portfolio_node)
-    g.add_edge(START, "research")
-    g.add_edge("research", "risk")
+    g.add_edge(START, "evidence")
+    g.add_edge("evidence", "research")
+    g.add_edge("research", "debate")
+    g.add_edge("debate", "risk")
     g.add_edge("risk", "portfolio")
     g.add_edge("portfolio", END)
     return g.compile()
@@ -272,6 +392,7 @@ async def run_research(symbol: str, question: str) -> dict:
         "symbol": symbol,
         "thesis": result.get("thesis", ""),
         "direction": result.get("direction", "none"),
+        "debate": result.get("debate"),
         "proposed_action": result.get("proposed_action"),
         "order": result.get("order"),
         "rationale": [r for r in result.get("rationale", []) if r],
@@ -287,6 +408,7 @@ def _stub_payload(run_id: str, symbol: str) -> dict:
             "the live research loop for {}.".format(symbol)
         ),
         "direction": "none",
+        "debate": None,
         "proposed_action": None,
         "order": None,
         "rationale": ["LLM not configured -- returning deterministic stub."],
@@ -295,9 +417,11 @@ def _stub_payload(run_id: str, symbol: str) -> dict:
 
 # ── Streaming runner (SSE-friendly) ─────────────────────────────────────
 
-_NODE_ORDER = ["research", "risk", "portfolio"]
+_NODE_ORDER = ["evidence", "research", "debate", "risk", "portfolio"]
 _NODE_LABEL = {
-    "research": "Research agent -- gathering data, forming a thesis",
+    "evidence": "Evidence fan-out -- gathering data in parallel",
+    "research": "Research agent -- forming a thesis",
+    "debate": "Bull/bear debate -- one round, judge commits",
     "risk": "Risk agent -- sizing and veto check",
     "portfolio": "Portfolio agent -- drafting the proposal",
 }
@@ -305,8 +429,11 @@ _NODE_LABEL = {
 
 def _node_summary(node: str, state: dict) -> str:
     """One human line per finished node for the live console."""
+    if node == "evidence":
+        gathered = [k for k, v in (state.get("evidence") or {}).items() if v]
+        return "gathered: {}".format(", ".join(gathered) if gathered else "quote only")
     if node == "research":
-        bits = ["direction: {}".format(state.get("direction", "none"))]
+        bits = ["lean: {}".format(state.get("direction", "none"))]
         sig = ((state.get("market") or {}).get("technical") or {}).get("signal") or {}
         if sig.get("label"):
             bits.append("technical: {} ({:+d})".format(sig["label"], sig.get("score", 0)))
@@ -314,6 +441,16 @@ def _node_summary(node: str, state: dict) -> str:
         if thesis:
             bits.append(thesis[:140] + ("..." if len(thesis) > 140 else ""))
         return " | ".join(bits)
+    if node == "debate":
+        deb = state.get("debate") or {}
+        conf = deb.get("confidence")
+        verdict = "judge: {}".format(deb.get("decision", state.get("direction", "none")))
+        if conf is not None:
+            try:
+                verdict += " (conf {:.0%})".format(float(conf))
+            except (TypeError, ValueError):
+                pass
+        return verdict
     if node == "risk":
         risk = state.get("risk") or {}
         if state.get("vetoed"):
@@ -332,6 +469,7 @@ def _final_payload(run_id: str, symbol: str, state: dict) -> dict:
         "symbol": symbol,
         "thesis": state.get("thesis", ""),
         "direction": state.get("direction", "none"),
+        "debate": state.get("debate"),
         "proposed_action": state.get("proposed_action"),
         "order": state.get("order"),
         "rationale": [r for r in state.get("rationale", []) if r],
@@ -358,8 +496,8 @@ async def run_research_stream(symbol: str, question: str):
     audit_log("agent.run.start", {"run_id": run_id, "symbol": symbol, "question": question})
     state: AgentState = {"run_id": run_id, "symbol": symbol, "question": question}
     merged: dict = dict(state)
-    yield {"event": "step", "node": "research", "status": "start",
-           "label": _NODE_LABEL["research"], "run_id": run_id}
+    yield {"event": "step", "node": _NODE_ORDER[0], "status": "start",
+           "label": _NODE_LABEL[_NODE_ORDER[0]], "run_id": run_id}
     async for chunk in _GRAPH.astream(state):
         for node, delta in chunk.items():
             if node not in _NODE_ORDER:

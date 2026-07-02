@@ -9,14 +9,29 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from fastapi import Depends
+
 from app import __version__
-from app.api import agents, alerts, analytics, audit, health, market, orders, stream
+from app.api import (
+    agents,
+    alerts,
+    analytics,
+    audit,
+    health,
+    market,
+    orders,
+    portfolios,
+    stream,
+)
+from app.api.auth import require_token
 from app.config import settings
 from app.core.db import init_db
+from app.execution.portfolios import ensure_default
 
 logging.basicConfig(level=settings.log_level)
 
 init_db()
+ensure_default()  # a 'default' portfolio always exists
 
 
 @contextlib.asynccontextmanager
@@ -53,9 +68,13 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(market.router)
 app.include_router(analytics.router)
-app.include_router(agents.router)
-app.include_router(orders.router)
-app.include_router(alerts.router)
+# Action routers are gated by the API token when one is configured
+# (settings.api_token); when unset, require_token is a no-op.
+_auth = [Depends(require_token)]
+app.include_router(agents.router, dependencies=_auth)
+app.include_router(orders.router, dependencies=_auth)
+app.include_router(alerts.router, dependencies=_auth)
+app.include_router(portfolios.router, dependencies=_auth)
 app.include_router(audit.router)
 app.include_router(stream.router)
 

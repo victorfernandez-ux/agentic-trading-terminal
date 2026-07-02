@@ -28,6 +28,13 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
   const onQuotesRef = useRef(onQuotes);
   onQuotesRef.current = onQuotes;
 
+  // Share live quotes with the parent AFTER commit, never inside the setState
+  // updater below (calling a parent setter mid-render trips React's
+  // "Cannot update a component while rendering a different component").
+  useEffect(() => {
+    onQuotesRef.current?.(quotes);
+  }, [quotes]);
+
   useEffect(() => {
     let ws: WebSocket | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -38,8 +45,7 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
       setQuotes((prev) => {
         const next = { ...prev };
         for (const q of list) if (q && q.symbol) next[q.symbol] = q;
-        onQuotesRef.current?.(next);
-        return next;
+        return next;  // pure updater; parent is notified via the effect above
       });
 
     // REST fallback: same payload shape, just slower.

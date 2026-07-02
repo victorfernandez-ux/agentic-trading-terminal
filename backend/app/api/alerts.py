@@ -22,6 +22,9 @@ class AlertCreate(BaseModel):
     value: float
     trigger: str = "once"
     cooldown_s: int = Field(default=300, ge=0, le=86_400)
+    # When set, a fired alert auto-runs the agent loop and queues a PROPOSAL
+    # (still gated by human approval). Rate-capped in app/alerts/autoresearch.
+    auto_research: bool = False
 
 
 @router.get("")

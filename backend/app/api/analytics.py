@@ -22,6 +22,7 @@ from app.analytics.technical import compute_indicators
 from app.analytics.valuation import dcf_valuation
 from app.data.options_chain import fetch_chain
 from app.data.providers import _is_crypto, get_provider
+from app.data.sentiment import fear_greed
 from app.data.universe import GROUPS
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -259,3 +260,20 @@ async def screener(
         log.warning("screener failed (%s/%s): %s", screen, universe, e)
         return {"universe": universe, "screen": screen, "matches": [],
                 "error": f"{type(e).__name__}: {str(e)[:160]}"}
+
+
+@router.get("/sentiment/fear-greed")
+async def fear_greed_index(market: str = "stocks") -> dict:
+    """Fear & Greed index (0–100). market = 'stocks' or 'crypto'.
+
+    Crypto = alternative.me; stocks = CNN when reachable, else an in-house
+    keyless composite (the `source` field says which). Degradation contract:
+    a fetch failure returns 200 + an `error` field, like the rest of /analytics.
+    """
+    try:
+        return await fear_greed(market)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except Exception as e:  # noqa: BLE001
+        log.warning("fear-greed failed (%s): %s", market, e)
+        return {"market": market, "error": f"{type(e).__name__}: {str(e)[:160]}"}

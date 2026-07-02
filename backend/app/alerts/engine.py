@@ -151,6 +151,12 @@ async def run_pass(slow: bool = False) -> list[dict]:
         ev = process_value(a, float(v))
         if ev:
             fired.append(ev)
+            if a.get("auto_research"):
+                # Fire-and-forget: an agent run can take ~30s; never block the
+                # evaluator tick. run_for_event proposes only (approval gate
+                # untouched) and swallows its own errors.
+                from app.alerts import autoresearch
+                asyncio.create_task(autoresearch.run_for_event(ev))
     return fired
 
 

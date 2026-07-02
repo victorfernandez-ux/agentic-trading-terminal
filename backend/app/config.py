@@ -26,12 +26,22 @@ class Settings(BaseSettings):
     openrouter_api_key: str | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     llm_model: str = "deepseek/deepseek-v4-flash"
+    # Optional per-role overrides for the bull/bear debate. Default (None) =>
+    # fall back to llm_model. Pattern from TradingAgents: cheap debaters, a
+    # stronger judge that must commit to a directional call.
+    llm_debater_model: str | None = None
+    llm_judge_model: str | None = None
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
 
     # Safety -- deliberately conservative defaults.
     trading_mode: str = "paper"  # paper | live
     require_human_approval: bool = True
+
+    # Single-user API token. When unset (default), auth is DISABLED so local
+    # dev and tests work unchanged. Set it to require a Bearer / X-API-Token
+    # header on the action routes (orders, alerts, agents).
+    api_token: str | None = None
 
 
 settings = Settings()

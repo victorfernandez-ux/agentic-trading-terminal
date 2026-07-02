@@ -17,6 +17,7 @@ from app.analytics.technical import compute_indicators as _compute_indicators
 from app.data.news import fetch_news
 from app.data.options_chain import fetch_chain
 from app.data.providers import _is_crypto, get_provider
+from app.data.sentiment import fear_greed
 from app.data.universe import GROUPS
 
 
@@ -96,6 +97,11 @@ async def get_news_tool(symbol: str, limit: int = 6) -> dict:
                           for i in items]}
 
 
+async def get_fear_greed_tool(market: str = "stocks") -> dict:
+    """Tool: market Fear & Greed index (0-100) — 'stocks' or 'crypto'."""
+    return await fear_greed(market)
+
+
 async def get_option_chain_tool(symbol: str, expiration: int | None = None) -> dict:
     """Tool: compact option chain (8 strikes around ATM) as research evidence."""
     chain = await fetch_chain(symbol, expiration)
@@ -122,4 +128,5 @@ TOOLS = {
     "get_option_chain": get_option_chain_tool,
     "get_news": get_news_tool,
     "run_screener": run_screener_tool,
+    "get_fear_greed": get_fear_greed_tool,
 }

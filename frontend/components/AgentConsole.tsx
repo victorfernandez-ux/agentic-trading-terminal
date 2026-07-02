@@ -7,10 +7,19 @@
 
 import { useRef, useState } from "react";
 
+type Debate = {
+  bull?: string;
+  bear?: string;
+  decision?: string;
+  confidence?: number | null;
+  judge_rationale?: string;
+} | null;
+
 type Result = {
   symbol: string;
   thesis: string;
   direction?: string;
+  debate?: Debate;
   proposed_action: string | null;
   order: Record<string, unknown> | null;
   order_id: string | null;
@@ -20,7 +29,13 @@ type Result = {
 
 type Step = { node: string; status: "start" | "end"; text: string };
 
-const NODE_ICON: Record<string, string> = { research: "🔎", risk: "🛡", portfolio: "📋" };
+const NODE_ICON: Record<string, string> = {
+  evidence: "🧰",
+  research: "🔎",
+  debate: "⚖️",
+  risk: "🛡",
+  portfolio: "📋",
+};
 
 export default function AgentConsole({
   symbol,
@@ -131,6 +146,23 @@ export default function AgentConsole({
           </div>
           <p style={{ margin: "0 0 8px" }}>{result.thesis}</p>
 
+          {result.debate && (result.debate.bull || result.debate.bear) && (
+            <div style={{ display: "flex", gap: 6, margin: "0 0 8px" }}>
+              {result.debate.bull && (
+                <div style={debateBox("#8fd694")}>
+                  <b style={{ color: "#8fd694" }}>▲ Bull</b>
+                  <div>{result.debate.bull}</div>
+                </div>
+              )}
+              {result.debate.bear && (
+                <div style={debateBox("#f7768e")}>
+                  <b style={{ color: "#f7768e" }}>▼ Bear</b>
+                  <div>{result.debate.bear}</div>
+                </div>
+              )}
+            </div>
+          )}
+
           {result.proposed_action ? (
             <div style={tag("#8fd694")}>📋 {result.proposed_action}</div>
           ) : (
@@ -190,4 +222,14 @@ const tag = (color: string): React.CSSProperties => ({
   color,
   borderRadius: 6,
   padding: "4px 8px",
+});
+
+const debateBox = (color: string): React.CSSProperties => ({
+  flex: 1,
+  border: `1px solid ${color}33`,
+  borderRadius: 6,
+  padding: "6px 8px",
+  color: "#9aa5b1",
+  fontSize: 11,
+  lineHeight: 1.4,
 });

@@ -22,6 +22,7 @@ from app.config import settings
 from app.core.audit import audit_log
 from app.core.db import OrderRow, SessionLocal
 from app.execution.broker import get_broker
+from app.execution.portfolios import DEFAULT_PORTFOLIO_ID
 
 
 class OrderNotFound(LookupError):
@@ -43,7 +44,8 @@ def _new_id() -> str:
 
 def create_pending(order: dict) -> dict:
     """Create an order in PENDING_APPROVAL state. No broker contact."""
-    record = {**order, "id": _new_id(), "status": "PENDING_APPROVAL"}
+    record = {"portfolio_id": DEFAULT_PORTFOLIO_ID, **order,
+              "id": _new_id(), "status": "PENDING_APPROVAL"}
     with SessionLocal() as s:
         s.add(OrderRow(id=record["id"], status=record["status"],
                        symbol=record.get("symbol"), data=record))
@@ -58,10 +60,17 @@ def get(order_id: str) -> dict | None:
         return dict(row.data) if row else None
 
 
-def list_orders() -> list[dict]:
+def list_orders(portfolio_id: str | None = None) -> list[dict]:
+    """All orders newest-first. With portfolio_id, only that portfolio's
+    orders (legacy orders with no portfolio_id count as the default one).
+    Default (None) returns everything — preserves prior behaviour."""
     with SessionLocal() as s:
         rows = s.query(OrderRow).order_by(OrderRow.seq.desc()).all()
-        return [dict(r.data) for r in rows]
+        records = [dict(r.data) for r in rows]
+    if portfolio_id is None:
+        return records
+    return [r for r in records
+            if r.get("portfolio_id", DEFAULT_PORTFOLIO_ID) == portfolio_id]
 
 
 def _save(order_id: str, record: dict) -> None:

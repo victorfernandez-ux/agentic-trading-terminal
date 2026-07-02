@@ -43,6 +43,17 @@ class AlertRow(Base):
     data = Column(JSON)
 
 
+class PortfolioRow(Base):
+    """A portfolio scopes orders/positions/audit. A single 'default' portfolio
+    is ensured at startup so existing single-portfolio behaviour is preserved;
+    multi-portfolio is groundwork for later. `data` holds the full record."""
+
+    __tablename__ = "portfolios"
+    id = Column(String, primary_key=True)   # 'default', or a generated id
+    name = Column(String)
+    data = Column(JSON)
+
+
 class AuditRow(Base):
     """Append-only audit trail (MVP req #5: log and replay every decision).
 
