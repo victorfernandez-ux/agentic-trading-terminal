@@ -33,6 +33,9 @@ nohup.out
 .vscode/
 .private/
 
+# Claude Code local config (machine-specific paths) + worktrees
+.claude/
+
 # SQLite dev DB
 *.db
 terminal.db
