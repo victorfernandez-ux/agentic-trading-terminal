@@ -18,8 +18,12 @@ optionally on a cheaper LLM_MODEL_DEBATE; `debate` key in the payload; AgentCons
 cases). v1.7 added the alert→research loop: per-alert `auto_research` flag; on fire the evaluator
 schedules `graph.run_propose` (shared with POST /agents/propose) with a templated question,
 rate-capped by ALERT_AUTO_RESEARCH_PER_HOUR (default 4/h, sliding window), audited, proposals
-only. Backend tests: **146 passing**. Read RESEARCH.md — verified data-source matrix + ranked
-agentic patterns (remaining: audit-log reflection memory, scan→research loop).
+only. v1.8 hardened the plumbing behavior-neutrally: per-request DB sessions (middleware +
+`db.session_scope()` ContextVar reuse), consistent `{"detail", "error": {code, message}}` HTTP
+error envelopes (legacy `detail` preserved; unhandled -> generic 500, nothing leaked), and
+Alembic (`backend/migrations/`, revision 0001 == create_all, proven by test). Backend tests:
+**155 passing**. Read RESEARCH.md — verified data-source matrix + ranked agentic patterns
+(remaining: audit-log reflection memory, scan→research loop).
 
 Stack: FastAPI + LangGraph (`backend/app/`), Next.js + Lightweight Charts (`frontend/`), SQLite default,
 Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired* (AGPL) — clean-room only.
@@ -33,13 +37,10 @@ Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired*
 
 ## Development plan (do in order; each item: tests green → commit → next)
 
-1. **Hardening.** Per-request DB session scope, Alembic migrations, consistent error envelopes.
-   No behavior changes — tests prove parity.
-
-2. **Auth + multi-portfolio groundwork.** Single-user token auth; `Portfolio` entity; default
+1. **Auth + multi-portfolio groundwork.** Single-user token auth; `Portfolio` entity; default
    portfolio preserves behavior. Live trading remains `NotImplementedError`.
 
-3. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
+2. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
 
 ## Working rules
 

@@ -25,12 +25,12 @@ def audit_log(event: str, payload: dict) -> None:
     try:
         # Imported here (not at module top) so a broken DB still allows
         # importing audit_log, and to keep this module dependency-light.
-        from app.core.db import AuditRow, SessionLocal
+        from app.core.db import AuditRow, session_scope
 
         # Round-trip through json to guarantee the payload is storable
         # (coerces datetimes/Decimals etc. to strings).
         safe_payload = json.loads(json.dumps(payload, default=str))
-        with SessionLocal() as s:
+        with session_scope() as s:
             s.add(AuditRow(
                 ts=ts,
                 event=event,

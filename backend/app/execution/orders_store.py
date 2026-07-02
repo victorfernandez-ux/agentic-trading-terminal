@@ -20,7 +20,7 @@ import uuid
 
 from app.config import settings
 from app.core.audit import audit_log
-from app.core.db import OrderRow, SessionLocal
+from app.core.db import OrderRow, session_scope
 from app.execution.broker import get_broker
 
 
@@ -44,7 +44,7 @@ def _new_id() -> str:
 def create_pending(order: dict) -> dict:
     """Create an order in PENDING_APPROVAL state. No broker contact."""
     record = {**order, "id": _new_id(), "status": "PENDING_APPROVAL"}
-    with SessionLocal() as s:
+    with session_scope() as s:
         s.add(OrderRow(id=record["id"], status=record["status"],
                        symbol=record.get("symbol"), data=record))
         s.commit()
@@ -53,19 +53,19 @@ def create_pending(order: dict) -> dict:
 
 
 def get(order_id: str) -> dict | None:
-    with SessionLocal() as s:
+    with session_scope() as s:
         row = s.query(OrderRow).filter_by(id=order_id).first()
         return dict(row.data) if row else None
 
 
 def list_orders() -> list[dict]:
-    with SessionLocal() as s:
+    with session_scope() as s:
         rows = s.query(OrderRow).order_by(OrderRow.seq.desc()).all()
         return [dict(r.data) for r in rows]
 
 
 def _save(order_id: str, record: dict) -> None:
-    with SessionLocal() as s:
+    with session_scope() as s:
         row = s.query(OrderRow).filter_by(id=order_id).first()
         if row:
             row.status = record["status"]
@@ -80,7 +80,7 @@ def _claim(order_id: str, new_status: str) -> None:
     check and the write happen in one statement inside one transaction,
     so exactly one concurrent caller can win the claim.
     """
-    with SessionLocal() as s:
+    with session_scope() as s:
         claimed = (
             s.query(OrderRow)
             .filter(OrderRow.id == order_id,

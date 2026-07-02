@@ -6,7 +6,7 @@ import time
 import uuid
 
 from app.core.audit import audit_log
-from app.core.db import AlertRow, SessionLocal
+from app.core.db import AlertRow, session_scope
 
 
 class AlertNotFound(LookupError):
@@ -35,7 +35,7 @@ def create(alert: dict) -> dict:
         "last_fired_ts": None,
         "created_ts": int(time.time() * 1000),
     }
-    with SessionLocal() as s:
+    with session_scope() as s:
         s.add(AlertRow(id=record["id"], status=record["status"],
                        symbol=record["symbol"], data=record))
         s.commit()
@@ -44,13 +44,13 @@ def create(alert: dict) -> dict:
 
 
 def list_alerts() -> list[dict]:
-    with SessionLocal() as s:
+    with session_scope() as s:
         rows = s.query(AlertRow).order_by(AlertRow.seq.desc()).all()
         return [r.data for r in rows]
 
 
 def get(alert_id: str) -> dict:
-    with SessionLocal() as s:
+    with session_scope() as s:
         row = s.query(AlertRow).filter(AlertRow.id == alert_id).one_or_none()
         if row is None:
             raise AlertNotFound(alert_id)
@@ -58,7 +58,7 @@ def get(alert_id: str) -> dict:
 
 
 def update(alert_id: str, updates: dict) -> dict:
-    with SessionLocal() as s:
+    with session_scope() as s:
         row = s.query(AlertRow).filter(AlertRow.id == alert_id).one_or_none()
         if row is None:
             raise AlertNotFound(alert_id)
@@ -76,7 +76,7 @@ def set_status(alert_id: str, status: str) -> dict:
 
 
 def delete(alert_id: str) -> None:
-    with SessionLocal() as s:
+    with session_scope() as s:
         n = s.query(AlertRow).filter(AlertRow.id == alert_id).delete()
         s.commit()
     if n == 0:

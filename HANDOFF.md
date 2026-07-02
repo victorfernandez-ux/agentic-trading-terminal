@@ -46,6 +46,17 @@ so a flapping market can't burn LLM budget; over-cap fires are audited as `alert
 Runs are fire-and-forget tasks (never block the 4s tick), audited start/done/error; failures never kill
 the evaluator. Proposals only — auto orders land PENDING_APPROVAL like any other. Alerts panel: "🤖
 research" checkbox on create + row badge. Backend tests: 146 (`tests/test_alert_research.py`).
+**v1.8 (July 2, 2026):** hardening (META_PROMPT item 3; behavior-neutral — the whole prior suite
+proves parity). (a) Per-request DB sessions: HTTP middleware opens ONE session per request into a
+ContextVar (`db.request_session`); every store call reuses it via `db.session_scope()`, which falls
+back to a short-lived session outside requests (evaluator, agent tasks) — SQLite engines now always
+get `check_same_thread=False` since the session crosses from the event loop into threadpool workers.
+(b) Consistent error envelopes: all HTTP errors return `{"detail", "error": {code, message}}` —
+`detail` keeps FastAPI's legacy shape for existing clients; unhandled exceptions become a generic 500
+envelope (internals logged, never leaked). (c) Alembic: `backend/alembic.ini` + `migrations/` with
+initial revision 0001 mirroring the models; dev still uses init_db()'s create_all, migrations are the
+Postgres path (`python -m alembic upgrade head` from backend\). Tests assert migrated schema ==
+create_all schema and one-session-per-request. Backend tests: 155 (`tests/test_hardening.py`).
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---

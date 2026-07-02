@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.core.db import AuditRow, SessionLocal
+from app.core.db import AuditRow, session_scope
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 
@@ -35,7 +35,7 @@ async def list_audit(
 ) -> list[dict]:
     """Recent audit events, newest first."""
     limit = max(1, min(int(limit), 1000))
-    with SessionLocal() as s:
+    with session_scope() as s:
         q = s.query(AuditRow).order_by(AuditRow.seq.desc())
         if event:
             q = q.filter(AuditRow.event == event)
@@ -50,7 +50,7 @@ async def list_audit(
 @router.get("/replay/{run_id}")
 async def replay_run(run_id: str) -> dict:
     """Replay view: all events of one agent run, in the order they happened."""
-    with SessionLocal() as s:
+    with session_scope() as s:
         rows = (
             s.query(AuditRow)
             .filter(AuditRow.run_id == run_id)
