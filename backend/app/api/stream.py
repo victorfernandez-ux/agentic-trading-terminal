@@ -20,6 +20,7 @@ import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.alerts import engine as alert_engine
+from app.config import settings
 from app.data.providers import get_quotes_batch
 
 router = APIRouter(tags=["stream"])
@@ -47,6 +48,12 @@ async def _fetch_quotes(symbols: list[str]) -> list[dict]:
 @router.websocket("/ws/quotes")
 async def ws_quotes(ws: WebSocket) -> None:
     await ws.accept()
+    # Single-user token auth (HTTP middleware doesn't cover WebSockets).
+    # Browsers can't set WS headers, so the token rides a query param.
+    if settings.api_token and ws.query_params.get("token") != settings.api_token:
+        await ws.send_json({"type": "error", "error": "missing or invalid API token"})
+        await ws.close(code=4401)
+        return
     raw = ws.query_params.get("symbols", "")
     symbols = [s.strip().upper() for s in raw.split(",") if s.strip()][:MAX_SYMBOLS]
     try:

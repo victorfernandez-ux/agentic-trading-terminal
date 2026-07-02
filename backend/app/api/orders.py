@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.execution import orders_store as store
+from app.execution import portfolios
 from app.execution.positions import get_positions
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -22,11 +23,14 @@ class OrderProposal(BaseModel):
     order_type: str = "market"
     limit_price: float | None = None
     source: str = "human"  # agent | human
+    portfolio_id: str = portfolios.DEFAULT_PORTFOLIO_ID
 
 
 @router.post("/propose")
 async def propose(order: OrderProposal) -> dict:
     """Create an order in PENDING_APPROVAL state. Nothing is sent to a broker yet."""
+    if not portfolios.exists(order.portfolio_id):
+        raise HTTPException(404, f"no portfolio {order.portfolio_id}")
     return store.create_pending(order.model_dump())
 
 
@@ -57,8 +61,8 @@ async def reject(order_id: str) -> dict:
 
 
 @router.get("")
-async def list_orders() -> list[dict]:
-    return store.list_orders()
+async def list_orders(portfolio_id: str | None = None) -> list[dict]:
+    return store.list_orders(portfolio_id=portfolio_id)
 
 
 @router.get("/positions/all")

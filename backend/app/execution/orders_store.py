@@ -20,7 +20,7 @@ import uuid
 
 from app.config import settings
 from app.core.audit import audit_log
-from app.core.db import OrderRow, session_scope
+from app.core.db import DEFAULT_PORTFOLIO_ID, OrderRow, session_scope
 from app.execution.broker import get_broker
 
 
@@ -44,9 +44,11 @@ def _new_id() -> str:
 def create_pending(order: dict) -> dict:
     """Create an order in PENDING_APPROVAL state. No broker contact."""
     record = {**order, "id": _new_id(), "status": "PENDING_APPROVAL"}
+    record.setdefault("portfolio_id", DEFAULT_PORTFOLIO_ID)
     with session_scope() as s:
         s.add(OrderRow(id=record["id"], status=record["status"],
-                       symbol=record.get("symbol"), data=record))
+                       symbol=record.get("symbol"),
+                       portfolio_id=record["portfolio_id"], data=record))
         s.commit()
     audit_log("order.proposed", record)
     return record
@@ -58,10 +60,12 @@ def get(order_id: str) -> dict | None:
         return dict(row.data) if row else None
 
 
-def list_orders() -> list[dict]:
+def list_orders(portfolio_id: str | None = None) -> list[dict]:
     with session_scope() as s:
-        rows = s.query(OrderRow).order_by(OrderRow.seq.desc()).all()
-        return [dict(r.data) for r in rows]
+        q = s.query(OrderRow).order_by(OrderRow.seq.desc())
+        if portfolio_id:
+            q = q.filter(OrderRow.portfolio_id == portfolio_id)
+        return [dict(r.data) for r in q.all()]
 
 
 def _save(order_id: str, record: dict) -> None:

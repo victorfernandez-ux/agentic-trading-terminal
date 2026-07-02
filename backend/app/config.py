@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Safety -- deliberately conservative defaults.
     trading_mode: str = "paper"  # paper | live
     require_human_approval: bool = True
+    # Single-user token auth. Unset (default) -> auth disabled for local
+    # dev. Set API_TOKEN -> every endpoint except /health and / requires
+    # "Authorization: Bearer <token>" (WS: ?token=<token>).
+    api_token: str | None = None
     # Alert->research loop: max automatic agent runs per rolling hour across
     # all alerts. Proposals only -- the human approval gate is untouched.
     alert_auto_research_per_hour: int = 4

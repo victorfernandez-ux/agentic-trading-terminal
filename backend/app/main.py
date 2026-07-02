@@ -13,7 +13,8 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
-from app.api import agents, alerts, analytics, audit, health, market, orders, stream
+from app.api import (agents, alerts, analytics, audit, health, market,
+                     orders, portfolios, stream)
 from app.config import settings
 from app.core import db
 from app.core.db import init_db
@@ -65,6 +66,25 @@ async def db_session_per_request(request: Request, call_next):
         return await call_next(request)
 
 
+# Paths that stay open with auth enabled: liveness probe + service banner.
+AUTH_EXEMPT_PATHS = ("/health", "/")
+
+
+@app.middleware("http")
+async def require_api_token(request: Request, call_next):
+    """Single-user token auth (groundwork). Disabled unless API_TOKEN is
+    set; then every endpoint except AUTH_EXEMPT_PATHS needs
+    'Authorization: Bearer <token>'. Registered after the session
+    middleware so it runs first — rejected requests never open a session.
+    WS auth is handled in the endpoint (app/api/stream.py, ?token=)."""
+    token = settings.api_token
+    if token and request.url.path not in AUTH_EXEMPT_PATHS:
+        if request.headers.get("authorization") != f"Bearer {token}":
+            return JSONResponse(status_code=401,
+                                content=_error_body(401, "missing or invalid API token"))
+    return await call_next(request)
+
+
 # ── Consistent error envelope ───────────────────────────────────────────
 # Every HTTP-error response carries {"detail", "error": {"code", "message"}}.
 # `detail` keeps FastAPI's default shape (existing clients read it); the
@@ -102,6 +122,7 @@ app.include_router(market.router)
 app.include_router(analytics.router)
 app.include_router(agents.router)
 app.include_router(orders.router)
+app.include_router(portfolios.router)
 app.include_router(alerts.router)
 app.include_router(audit.router)
 app.include_router(stream.router)

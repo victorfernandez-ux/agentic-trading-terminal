@@ -57,6 +57,17 @@ envelope (internals logged, never leaked). (c) Alembic: `backend/alembic.ini` + 
 initial revision 0001 mirroring the models; dev still uses init_db()'s create_all, migrations are the
 Postgres path (`python -m alembic upgrade head` from backend\). Tests assert migrated schema ==
 create_all schema and one-session-per-request. Backend tests: 155 (`tests/test_hardening.py`).
+**v1.9 (July 2, 2026):** auth + multi-portfolio groundwork (final v1.6-plan item). (a) Single-user
+token auth, off by default: set `API_TOKEN` and every endpoint except /health and / requires
+`Authorization: Bearer <token>` (401 envelope; the auth middleware runs outside the session
+middleware so rejected requests never open a DB session). WS: `?token=` query param (browsers can't
+set WS headers) — bad/missing token gets an error frame + close 4401. (b) `PortfolioRow` +
+`orders.portfolio_id` column; init_db seeds the `default` portfolio, `create_pending` stamps it, so
+agents/UI are unchanged. `/portfolios` CRUD (list/create/get), `POST /orders/propose` takes an
+optional validated `portfolio_id`, `GET /orders?portfolio_id=` filters. Alembic migration 0002 +
+an init_db heal step that ALTERs pre-existing dev DBs (create_all can't add columns — this bit a
+live DB during verification). Live trading still raises `NotImplementedError` (now pinned by a
+test). Backend tests: 167 (`tests/test_auth_portfolio.py`).
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---

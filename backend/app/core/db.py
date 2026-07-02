@@ -30,7 +30,20 @@ class OrderRow(Base):
     id = Column(String, unique=True, index=True)
     status = Column(String, index=True)
     symbol = Column(String, index=True)
+    portfolio_id = Column(String, index=True, nullable=True)  # NULL = legacy -> default
     data = Column(JSON)  # full order record
+
+
+class PortfolioRow(Base):
+    """Multi-portfolio groundwork. Every order belongs to a portfolio;
+    the 'default' portfolio is created by init_db and preserves the
+    single-portfolio behavior everywhere."""
+
+    __tablename__ = "portfolios"
+    seq = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String, unique=True, index=True)
+    name = Column(String)
+    data = Column(JSON)
 
 
 class AlertRow(Base):
@@ -124,5 +137,36 @@ def request_session():
         s.close()
 
 
+DEFAULT_PORTFOLIO_ID = "default"
+
+
+def _ensure_schema_upgrades(eng) -> None:
+    """Zero-setup dev path: create_all never ALTERs existing tables, so
+    additive column changes are applied here for pre-existing dev DBs.
+    Real deployments use Alembic (migration 0002 does the same)."""
+    from sqlalchemy import inspect
+
+    insp = inspect(eng)
+    if "orders" in insp.get_table_names():
+        cols = {c["name"] for c in insp.get_columns("orders")}
+        if "portfolio_id" not in cols:
+            log.info("upgrading dev schema: orders.portfolio_id")
+            with eng.begin() as c:
+                c.execute(text("ALTER TABLE orders ADD COLUMN portfolio_id VARCHAR"))
+                c.execute(text("CREATE INDEX IF NOT EXISTS "
+                               "ix_orders_portfolio_id ON orders (portfolio_id)"))
+
+
 def init_db() -> None:
+    _ensure_schema_upgrades(engine)
     Base.metadata.create_all(engine)
+    # Idempotently seed the default portfolio so single-portfolio behavior
+    # is preserved without any client knowing portfolios exist.
+    import time
+
+    with SessionLocal() as s:
+        if not s.query(PortfolioRow).filter_by(id=DEFAULT_PORTFOLIO_ID).first():
+            record = {"id": DEFAULT_PORTFOLIO_ID, "name": "Default",
+                      "created_ts": int(time.time() * 1000)}
+            s.add(PortfolioRow(id=record["id"], name=record["name"], data=record))
+            s.commit()

@@ -6,7 +6,7 @@ You are working on the **Agentic Trading Terminal** in this folder. Read `CLAUDE
 (current state, gotchas) and `PROJECT_PLAN.md` (vision) first, then execute the development plan below
 **in order**. When you finish a cycle, update `HANDOFF.md` and rewrite this file for the next one.
 
-## Context (July 2, 2026 — v1.6)
+## Context (July 2, 2026 — v1.9)
 
 Everything through v1.4 (SSE streaming, backtest UI, options analytics, discovery layer: batched
 quotes, symbol search + dynamic watchlist, news evidence, 9-screen screener) plus v1.5 (alerts
@@ -21,9 +21,11 @@ rate-capped by ALERT_AUTO_RESEARCH_PER_HOUR (default 4/h, sliding window), audit
 only. v1.8 hardened the plumbing behavior-neutrally: per-request DB sessions (middleware +
 `db.session_scope()` ContextVar reuse), consistent `{"detail", "error": {code, message}}` HTTP
 error envelopes (legacy `detail` preserved; unhandled -> generic 500, nothing leaked), and
-Alembic (`backend/migrations/`, revision 0001 == create_all, proven by test). Backend tests:
-**155 passing**. Read RESEARCH.md — verified data-source matrix + ranked agentic patterns
-(remaining: audit-log reflection memory, scan→research loop).
+Alembic (`backend/migrations/`, revisions == create_all, proven by test). v1.9 added single-user
+token auth (API_TOKEN, off by default; Bearer header, WS ?token=, /health exempt) and the
+Portfolio entity (`orders.portfolio_id`, seeded `default` preserves behavior, /portfolios CRUD,
+migration 0002 + init_db heal for legacy dev DBs). Backend tests: **167 passing**. Read
+RESEARCH.md — verified data-source matrix + ranked agentic patterns.
 
 Stack: FastAPI + LangGraph (`backend/app/`), Next.js + Lightweight Charts (`frontend/`), SQLite default,
 Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired* (AGPL) — clean-room only.
@@ -37,10 +39,21 @@ Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired*
 
 ## Development plan (do in order; each item: tests green → commit → next)
 
-1. **Auth + multi-portfolio groundwork.** Single-user token auth; `Portfolio` entity; default
-   portfolio preserves behavior. Live trading remains `NotImplementedError`.
+The v1.6 plan is complete (debate, alert→research, hardening, auth/portfolios — docs synced per
+item). Next cycle, from RESEARCH.md's remaining ranked patterns:
 
-2. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
+1. **Reflection memory from the audit log.** After a position closes, compute realized P&L from
+   the audit trail and store a short reflection; inject the last N reflections for the symbol
+   into the debate/judge prompts (SQL-recency first; BM25 only if needed). Tests with a crafted
+   audit history.
+
+2. **Scan → research loop.** Screener top hit (ranked in code) can feed run_propose on a
+   schedule or on demand — reuse the alert loop's hourly cap + audit pattern; proposals only.
+
+3. **Frontend: portfolio switcher.** Dropdown over /portfolios; Approval Queue + Positions
+   filter by the selected portfolio (default preserves today's view).
+
+4. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
 
 ## Working rules
 
