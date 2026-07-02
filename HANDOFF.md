@@ -80,6 +80,10 @@ setState-in-render error — gone, verified in console), `suppressHydrationWarni
 (`GET /orders/positions/all?portfolio_id=`). The duplicate implementations of debate/auth/
 portfolios on that branch were NOT merged (main's tested versions won); one-off .bat helpers stay
 on the rescue branch. Backend tests: 185 (`tests/test_sentiment.py`).
+**Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
+test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
+plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README
+disclaimer pending; API_TOKEN + CORS lockdown required before any hosted deployment).
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---

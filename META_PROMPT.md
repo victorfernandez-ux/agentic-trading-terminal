@@ -53,7 +53,18 @@ item). Next cycle, from RESEARCH.md's remaining ranked patterns:
 3. **Frontend: portfolio switcher.** Dropdown over /portfolios; Approval Queue + Positions
    filter by the selected portfolio (default preserves today's view).
 
-4. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
+4. **Public-repo security pass (repo is PUBLIC for public testing — manage along the way).**
+   Done at publication (July 2, 2026): tracked-file secret scan clean; `.env`/`.private/`
+   gitignored; GitHub secret scanning + push protection + Dependabot alerts enabled. Accepted
+   low-risk: `.claude/launch.json` (local path/username, no secrets) exists in history at
+   `a0799ad`. Before promoting the public test: add a LICENSE (none = all rights reserved;
+   analytics stay FinceptTerminal-*inspired* clean-room — AGPL forbids copying code) and a
+   README disclaimer (paper-trading research tool; not financial advice; live trading
+   hard-disabled). Before any hosted deployment: set `API_TOKEN`, lock CORS to the real origin,
+   move off SQLite. As it evolves: triage Dependabot alerts, add branch protection on main once
+   PRs/collaborators appear, re-run a secret scan before each public milestone.
+
+5. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
 
 ## Working rules
 
