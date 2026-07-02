@@ -1,0 +1,22 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:DATABASE_URL='sqlite:///./terminal.db'; Set-Location backend; & 'C:\\Users\\vifeg\\dev\\Agentic Trading Terminal\\backend\\.venv\\Scripts\\python.exe' -X utf8 -m uvicorn app.main:app --port 8000 --log-level info"
+      ],
+      "port": 8000,
+      "autoPort": false
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

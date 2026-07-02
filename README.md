@@ -69,13 +69,13 @@ npm run dev
 
 ## Test
 
-From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (139 passing: health, approval gate +
+From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (146 passing: health, approval gate +
 double-approve race, persistence, audit log + replay, order-sizing notional cap, WebSocket streaming,
 SSE agent-stream sequence, evidence fan-out + bull/bear debate (scripted LLM), the analytics suite —
 indicator math, risk metrics, backtester no-lookahead/fees, DCF closed-form checks, persona scoring,
 options (Hull textbook values, put-call parity, IV round-trip), spark batch quotes, symbol search,
 news parse/cache, screener conditions over crafted universes, alert crossing/cooldown/push semantics,
-and sizing bands)
+the alert→research loop (opt-in flag, hourly cap, approval-gate parity), and sizing bands)
 
 ## Layout
 

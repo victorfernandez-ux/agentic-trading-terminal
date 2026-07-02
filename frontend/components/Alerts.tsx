@@ -16,6 +16,7 @@ type Alert = {
   op: string;
   value: number;
   trigger: string;
+  auto_research?: boolean;
   fired_count: number;
   last_state: { side: string; value: number } | null;
 };
@@ -40,6 +41,7 @@ export default function Alerts({ symbol }: { symbol: string }) {
   const [op, setOp] = useState("crosses_above");
   const [value, setValue] = useState<string>("");
   const [trigger, setTrigger] = useState("once");
+  const [autoResearch, setAutoResearch] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -68,7 +70,7 @@ export default function Alerts({ symbol }: { symbol: string }) {
     const r = await fetch("/api/alerts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol, metric, op, value: v, trigger }),
+      body: JSON.stringify({ symbol, metric, op, value: v, trigger, auto_research: autoResearch }),
     });
     if (!r.ok) setErr((await r.json()).detail ?? "create failed");
     else {
@@ -108,6 +110,17 @@ export default function Alerts({ symbol }: { symbol: string }) {
           <option value="once">once</option>
           <option value="every_time">every time</option>
         </select>
+        <label
+          style={{ display: "flex", alignItems: "center", gap: 4, color: autoResearch ? "#7aa2f7" : dim, cursor: "pointer" }}
+          title="On fire, auto-run the research agents on the hit (rate-capped). Proposals only — orders still stop at the approval queue."
+        >
+          <input
+            type="checkbox"
+            checked={autoResearch}
+            onChange={(e) => setAutoResearch(e.target.checked)}
+          />
+          🤖 research
+        </label>
         <button onClick={create} style={btn}>+ Alert</button>
         {err && <span style={{ color: "#f7768e" }}>{err}</span>}
       </div>
@@ -135,6 +148,9 @@ export default function Alerts({ symbol }: { symbol: string }) {
             <b>{a.symbol}</b> {METRIC_LABEL[a.metric] ?? a.metric} {OP_LABEL[a.op] ?? a.op}{" "}
             {a.value.toLocaleString()}
             <span style={{ color: dim }}> · {a.trigger === "once" ? "once" : "repeat"}</span>
+            {a.auto_research && (
+              <span title="fires into agent research (rate-capped; proposals only)"> 🤖</span>
+            )}
           </span>
           <span style={{ color: dim }}>
             {a.last_state ? `now ${a.last_state.value?.toLocaleString?.() ?? a.last_state.value} (${a.last_state.side})` : "awaiting first tick"}

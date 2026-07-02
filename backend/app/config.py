@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     # Safety -- deliberately conservative defaults.
     trading_mode: str = "paper"  # paper | live
     require_human_approval: bool = True
+    # Alert->research loop: max automatic agent runs per rolling hour across
+    # all alerts. Proposals only -- the human approval gate is untouched.
+    alert_auto_research_per_hour: int = 4
 
 
 settings = Settings()

@@ -27,6 +27,9 @@ def create(alert: dict) -> dict:
         "value": float(alert["value"]),
         "trigger": alert.get("trigger", "once"),
         "cooldown_s": int(alert.get("cooldown_s", 300)),
+        # On fire, feed the hit into the agent propose loop (rate-capped;
+        # proposals only -- the approval gate is untouched).
+        "auto_research": bool(alert.get("auto_research", False)),
         "last_state": None,   # seeded on first evaluation, never fires
         "fired_count": 0,
         "last_fired_ts": None,

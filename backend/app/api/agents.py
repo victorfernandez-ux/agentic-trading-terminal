@@ -14,7 +14,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.agents.graph import run_research, run_research_stream
+from app.agents.graph import run_propose, run_research, run_research_stream
 from app.execution import orders_store as store
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -44,19 +44,13 @@ async def propose(req: ResearchRequest) -> dict:
     ever reaches the (paper) broker.
     """
     try:
-        result = await run_research(symbol=req.symbol, question=req.question)
+        return await run_propose(symbol=req.symbol, question=req.question,
+                                 source="agent")
     except Exception as e:  # noqa: BLE001
         return {"symbol": req.symbol, "thesis": "", "direction": "none",
                 "proposed_action": None, "order": None, "order_id": None,
                 "order_status": None, "rationale": [],
                 "error": f"{type(e).__name__}: {str(e)[:200]}"}
-    order_record = None
-    draft = result.get("order")
-    if draft:
-        order_record = store.create_pending({**draft, "source": "agent"})
-    result["order_id"] = order_record["id"] if order_record else None
-    result["order_status"] = order_record["status"] if order_record else None
-    return result
 
 
 def _sse(payload: dict) -> str:

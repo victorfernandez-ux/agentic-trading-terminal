@@ -8,6 +8,7 @@ import time
 from collections import deque
 
 from app.alerts import store
+from app.config import settings
 from app.core.audit import audit_log
 
 log = logging.getLogger("alerts")
@@ -127,6 +128,62 @@ async def _slow_values(symbols: list[str]) -> dict[str, dict]:
     return out
 
 
+# ── Alert -> research loop ──────────────────────────────────────────────
+# On fire, an opted-in alert feeds the hit into the agent propose loop.
+# Global sliding-window cap so a flapping market can't burn LLM budget;
+# proposals only -- every order still stops at the human approval gate.
+
+_AUTO_WINDOW_S = 3600.0
+_AUTO_RUNS: deque[float] = deque()          # launch timestamps, last hour
+_AUTO_TASKS: set[asyncio.Task] = set()      # keep refs so tasks aren't GC'd
+
+
+def _auto_cap_ok(now: float) -> bool:
+    while _AUTO_RUNS and now - _AUTO_RUNS[0] > _AUTO_WINDOW_S:
+        _AUTO_RUNS.popleft()
+    return len(_AUTO_RUNS) < settings.alert_auto_research_per_hour
+
+
+async def _auto_research(alert: dict, event: dict) -> None:
+    from app.agents.graph import run_propose
+
+    question = (
+        "Alert fired: {msg}. Evaluate whether to take a position now; "
+        "if there is no edge, say so explicitly."
+    ).format(msg=event["message"])
+    try:
+        result = await run_propose(alert["symbol"], question, source="alert_auto")
+        audit_log("alert.auto_research.done", {
+            "alert_id": alert["id"], "symbol": alert["symbol"],
+            "run_id": result.get("run_id"), "direction": result.get("direction"),
+            "order_id": result.get("order_id")})
+    except Exception as e:  # noqa: BLE001 -- an LLM hiccup never kills anything
+        log.warning("auto-research for %s failed: %s", alert["id"], e)
+        audit_log("alert.auto_research.error", {
+            "alert_id": alert["id"], "error": f"{type(e).__name__}: {str(e)[:200]}"})
+
+
+def _maybe_schedule_auto_research(alert: dict, event: dict) -> bool:
+    """Schedule a background agent run for a fired alert. Returns True if
+    scheduled. Never blocks the evaluator tick."""
+    if not alert.get("auto_research"):
+        return False
+    now = time.time()
+    if not _auto_cap_ok(now):
+        audit_log("alert.auto_research.skipped", {
+            "alert_id": alert["id"], "symbol": alert["symbol"],
+            "reason": "hourly cap ({}/h) reached".format(
+                settings.alert_auto_research_per_hour)})
+        return False
+    _AUTO_RUNS.append(now)
+    audit_log("alert.auto_research.start", {
+        "alert_id": alert["id"], "symbol": alert["symbol"], "seq": event["seq"]})
+    task = asyncio.create_task(_auto_research(alert, event))
+    _AUTO_TASKS.add(task)
+    task.add_done_callback(_AUTO_TASKS.discard)
+    return True
+
+
 async def run_pass(slow: bool = False) -> list[dict]:
     """One evaluator pass over all active alerts. Returns fired events."""
     active = [a for a in store.list_alerts() if a["status"] == "active"]
@@ -151,6 +208,7 @@ async def run_pass(slow: bool = False) -> list[dict]:
         ev = process_value(a, float(v))
         if ev:
             fired.append(ev)
+            _maybe_schedule_auto_research(a, ev)
     return fired
 
 

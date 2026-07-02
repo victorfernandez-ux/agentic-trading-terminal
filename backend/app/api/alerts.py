@@ -22,6 +22,9 @@ class AlertCreate(BaseModel):
     value: float
     trigger: str = "once"
     cooldown_s: int = Field(default=300, ge=0, le=86_400)
+    # On fire, auto-run the research agents on the hit (rate-capped server
+    # side; proposals only -- orders still stop at the approval gate).
+    auto_research: bool = False
 
 
 @router.get("")

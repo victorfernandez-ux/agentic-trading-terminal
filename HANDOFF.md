@@ -37,6 +37,15 @@ gained a `debate` key ({bull, bear, verdict}); AgentConsole shows the ⚖️ deb
 cases so the approver sees the best case AGAINST. New audit event `agent.debate`. run_research contract
 otherwise unchanged; sizing still 100%% in code. Backend tests: 139 (`tests/test_debate.py` + reworked
 fan-out/stream tests; all LLM calls scripted).
+**v1.7 (July 2, 2026):** alert→research loop (META_PROMPT item 2). Per-alert opt-in `auto_research`
+flag (AlertCreate + store): when a flagged alert fires, the evaluator schedules a background agent run
+via the new `graph.run_propose(symbol, question, source)` — the single propose entry point now shared
+by POST /agents/propose (source="agent") and the loop (source="alert_auto") — with a templated question
+built from the fired-event message. Global sliding-window cap `ALERT_AUTO_RESEARCH_PER_HOUR` (default 4)
+so a flapping market can't burn LLM budget; over-cap fires are audited as `alert.auto_research.skipped`.
+Runs are fire-and-forget tasks (never block the 4s tick), audited start/done/error; failures never kill
+the evaluator. Proposals only — auto orders land PENDING_APPROVAL like any other. Alerts panel: "🤖
+research" checkbox on create + row badge. Backend tests: 146 (`tests/test_alert_research.py`).
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---

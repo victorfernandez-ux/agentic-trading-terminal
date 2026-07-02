@@ -357,6 +357,23 @@ async def run_research(symbol: str, question: str) -> dict:
         "rationale": [r for r in result.get("rationale", []) if r],
     }
 
+async def run_propose(symbol: str, question: str, source: str = "agent") -> dict:
+    """run_research + queue any order draft as PENDING_APPROVAL.
+
+    Single entry point for every proposer (REST endpoint, alert auto-research).
+    Proposals only -- the human approval gate in app/api/orders.py decides
+    whether anything ever reaches the (paper) broker.
+    """
+    result = await run_research(symbol=symbol, question=question)
+    record = None
+    draft = result.get("order")
+    if draft:
+        record = orders_store.create_pending({**draft, "source": source})
+    result["order_id"] = record["id"] if record else None
+    result["order_status"] = record["status"] if record else None
+    return result
+
+
 def _stub_payload(run_id: str, symbol: str) -> dict:
     """Deterministic offline result so API/UI work without an LLM key."""
     return {

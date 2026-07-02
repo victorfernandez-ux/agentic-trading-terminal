@@ -15,7 +15,10 @@ agent graph is now **research → debate → risk → portfolio** — research i
 fan-out (asyncio.gather: quote/bars required, technical/risk-metrics/personas/news guarded, zero
 LLM tokens), then a 1-round bull → bear → judge debate commits the direction (anti-hold; debaters
 optionally on a cheaper LLM_MODEL_DEBATE; `debate` key in the payload; AgentConsole shows both
-cases). Backend tests: **139 passing**. Read RESEARCH.md — verified data-source matrix + ranked
+cases). v1.7 added the alert→research loop: per-alert `auto_research` flag; on fire the evaluator
+schedules `graph.run_propose` (shared with POST /agents/propose) with a templated question,
+rate-capped by ALERT_AUTO_RESEARCH_PER_HOUR (default 4/h, sliding window), audited, proposals
+only. Backend tests: **146 passing**. Read RESEARCH.md — verified data-source matrix + ranked
 agentic patterns (remaining: audit-log reflection memory, scan→research loop).
 
 Stack: FastAPI + LangGraph (`backend/app/`), Next.js + Lightweight Charts (`frontend/`), SQLite default,
@@ -30,16 +33,13 @@ Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired*
 
 ## Development plan (do in order; each item: tests green → commit → next)
 
-1. **Alert→research loop.** Optional per-alert flag: on fire, POST the hit into /agents/propose
-   with a templated question (cap auto-runs/hour; proposals only — approval gate untouched). Tests.
-
-2. **Hardening.** Per-request DB session scope, Alembic migrations, consistent error envelopes.
+1. **Hardening.** Per-request DB session scope, Alembic migrations, consistent error envelopes.
    No behavior changes — tests prove parity.
 
-3. **Auth + multi-portfolio groundwork.** Single-user token auth; `Portfolio` entity; default
+2. **Auth + multi-portfolio groundwork.** Single-user token auth; `Portfolio` entity; default
    portfolio preserves behavior. Live trading remains `NotImplementedError`.
 
-4. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
+3. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
 
 ## Working rules
 
