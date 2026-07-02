@@ -69,7 +69,7 @@ npm run dev
 
 ## Test
 
-From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (167 passing: health, approval gate +
+From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (185 passing: health, approval gate +
 double-approve race, persistence, audit log + replay, order-sizing notional cap, WebSocket streaming,
 SSE agent-stream sequence, evidence fan-out + bull/bear debate (scripted LLM), the analytics suite —
 indicator math, risk metrics, backtester no-lookahead/fees, DCF closed-form checks, persona scoring,

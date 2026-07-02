@@ -66,6 +66,6 @@ async def list_orders(portfolio_id: str | None = None) -> list[dict]:
 
 
 @router.get("/positions/all")
-async def positions() -> list[dict]:
+async def positions(portfolio_id: str | None = None) -> list[dict]:
     """Current positions with live market value and unrealized P&L."""
-    return await get_positions()
+    return await get_positions(portfolio_id)

@@ -7,8 +7,12 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning: browser extensions (e.g. Kapture) inject
+    // attributes/classes onto <html>/<body> before React hydrates, which would
+    // otherwise trip a hydration mismatch. Scoped to these elements only.
+    <html lang="en" suppressHydrationWarning>
       <body
+        suppressHydrationWarning
         style={{
           margin: 0,
           background: "#0b0e14",

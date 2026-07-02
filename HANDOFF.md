@@ -68,6 +68,18 @@ optional validated `portfolio_id`, `GET /orders?portfolio_id=` filters. Alembic 
 an init_db heal step that ALTERs pre-existing dev DBs (create_all can't add columns — this bit a
 live DB during verification). Live trading still raises `NotImplementedError` (now pinned by a
 test). Backend tests: 167 (`tests/test_auth_portfolio.py`).
+**v1.9.1 (July 2, 2026):** recovered an earlier session's uncommitted work found on main's working
+tree (preserved verbatim on branch `parallel-session-wip` before merging v1.6–v1.9). Ported the
+unique pieces: **Fear & Greed sentiment** — `app/data/sentiment.py` (crypto: alternative.me;
+stocks: CNN with browser UA, else transparent in-house composite from keyless Yahoo data; cached;
+`source` field says which), `GET /analytics/sentiment/fear-greed?market=stocks|crypto`,
+`get_fear_greed` agent tool, FearGreed gauge panel under the watchlist (market toggle). Plus three
+fixes: Watchlist no longer calls the parent's setState inside a setState updater (React
+setState-in-render error — gone, verified in console), `suppressHydrationWarning` on html/body
+(kills the long-standing extension-injection hydration badge), and portfolio-aware positions
+(`GET /orders/positions/all?portfolio_id=`). The duplicate implementations of debate/auth/
+portfolios on that branch were NOT merged (main's tested versions won); one-off .bat helpers stay
+on the rescue branch. Backend tests: 185 (`tests/test_sentiment.py`).
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---

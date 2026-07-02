@@ -10,6 +10,7 @@ import Analytics from "@/components/Analytics";
 import SymbolSearch from "@/components/SymbolSearch";
 import News from "@/components/News";
 import Alerts from "@/components/Alerts";
+import FearGreed from "@/components/FearGreed";
 
 type Health = { status: string; trading_mode: string; require_human_approval: boolean };
 
@@ -97,6 +98,7 @@ export default function Terminal() {
             onQuotes={setQuotes}
             onRemove={removeSymbol}
           />
+          <FearGreed />
         </section>
 
         <section style={{ ...panel, gridArea: "chart" }}>

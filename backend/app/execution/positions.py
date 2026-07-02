@@ -26,9 +26,9 @@ def _aggregate(orders: list[dict]) -> dict[str, dict]:
     return pos
 
 
-async def get_positions() -> list[dict]:
+async def get_positions(portfolio_id: str | None = None) -> list[dict]:
     rows: list[dict] = []
-    for sym, p in _aggregate(store.list_orders()).items():
+    for sym, p in _aggregate(store.list_orders(portfolio_id)).items():
         qty = round(p["qty"], 8)
         if abs(qty) < 1e-9:
             continue  # flat
