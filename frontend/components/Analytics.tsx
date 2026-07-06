@@ -438,8 +438,9 @@ function EquityChart({ points }: { points: { t: number; equity: number }[] }) {
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!ref.current || points.length === 0) return;
-    const chart: IChartApi = createChart(ref.current, {
+    const el = ref.current;
+    if (!el || points.length === 0) return;
+    const chart: IChartApi = createChart(el, {
       height: 170,
       layout: { background: { color: "transparent" }, textColor: "#5c6773", fontSize: 10 },
       grid: { vertLines: { color: "#141a26" }, horzLines: { color: "#141a26" } },
@@ -456,11 +457,21 @@ function EquityChart({ points }: { points: { t: number; equity: number }[] }) {
       points.map((p) => ({ time: Math.floor(p.t / 1000) as never, value: p.equity }))
     );
     chart.timeScale().fitContent();
-    const onResize = () => ref.current && chart.applyOptions({ width: ref.current.clientWidth });
+    // ResizeObserver: the container can start hidden (width 0) inside a
+    // mobile tab and only gain a width when the tab becomes visible.
+    let lastWidth = 0;
+    const onResize = () => {
+      const w = el.clientWidth;
+      if (w <= 0) return;
+      chart.applyOptions({ width: w });
+      if (lastWidth === 0) chart.timeScale().fitContent();
+      lastWidth = w;
+    };
     onResize();
-    window.addEventListener("resize", onResize);
+    const ro = new ResizeObserver(onResize);
+    ro.observe(el);
     return () => {
-      window.removeEventListener("resize", onResize);
+      ro.disconnect();
       chart.remove();
     };
   }, [points]);

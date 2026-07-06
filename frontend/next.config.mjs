@@ -1,10 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Proxy API calls to the FastAPI backend during development.
+  // Proxy API calls to the FastAPI backend. BACKEND_URL lets a LAN/mobile
+  // deployment point somewhere other than the dev default.
   async rewrites() {
-    return [
-      { source: "/api/:path*", destination: "http://localhost:8000/:path*" },
-    ];
+    const backend = process.env.BACKEND_URL ?? "http://localhost:8000";
+    return [{ source: "/api/:path*", destination: `${backend}/:path*` }];
   },
 };
 

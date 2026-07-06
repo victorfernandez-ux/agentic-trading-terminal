@@ -72,10 +72,14 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
     const connect = () => {
       if (disposed) return;
       try {
-        // Dev: talk to the backend directly (Next's /api rewrite is HTTP-only).
+        // Talk to the backend directly (Next's /api rewrite is HTTP-only).
+        // NEXT_PUBLIC_WS_BASE overrides for phones/PWA installs that can't
+        // reach the backend on the page host's :8000 (e.g. wss://api.example.com).
         const proto = window.location.protocol === "https:" ? "wss" : "ws";
+        const base =
+          process.env.NEXT_PUBLIC_WS_BASE ?? `${proto}://${window.location.hostname}:8000`;
         const qs = encodeURIComponent(symbols.join(","));
-        ws = new WebSocket(`${proto}://${window.location.hostname}:8000/ws/quotes?symbols=${qs}`);
+        ws = new WebSocket(`${base}/ws/quotes?symbols=${qs}`);
         ws.onopen = () => {
           if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
           setMode("live");

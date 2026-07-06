@@ -80,6 +80,20 @@ setState-in-render error — gone, verified in console), `suppressHydrationWarni
 (`GET /orders/positions/all?portfolio_id=`). The duplicate implementations of debate/auth/
 portfolios on that branch were NOT merged (main's tested versions won); one-off .bat helpers stay
 on the rescue branch. Backend tests: 185 (`tests/test_sentiment.py`).
+**v1.10 (July 6, 2026):** mobile app (installable PWA + phone UI; frontend-only, backend untouched).
+(a) PWA: `app/manifest.ts` (standalone display, generated candlestick icons incl. maskable in
+`public/icons/`), viewport/theme-color/apple-web-app metadata in `layout.tsx`, conservative service
+worker `public/sw.js` (registered in production only; NEVER caches `/api/*` or `/ws/*` — market data
+stays live; cache-first for hashed `_next/static`, network-first shell for offline open). (b) Mobile
+shell at <768px (`lib/useIsMobile.ts` matchMedia): bottom tab bar (`components/MobileNav.tsx`) with
+Markets / Chart / Agent / Orders / Analytics views in `page.tsx`; all views stay MOUNTED and toggle
+via CSS (`app/globals.css`, first stylesheet in the repo — safe-area insets, coarse-pointer tap
+targets) so the quotes WS, agent SSE stream and pollers survive tab switches; picking a watchlist
+symbol jumps to the Chart tab. Desktop grid is unchanged (still inline-styled). (c) Charts moved to
+ResizeObserver (hidden tabs mount at width 0 and get sized when shown, with a fitContent on first
+reveal). (d) Deployment knobs for real phones: `BACKEND_URL` env drives the `/api` rewrite
+(next.config.mjs), `NEXT_PUBLIC_WS_BASE` overrides the quotes-WS host (Watchlist) — defaults keep
+dev behavior (localhost:8000). Gotcha: body styles moved from layout.tsx inline to globals.css.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README

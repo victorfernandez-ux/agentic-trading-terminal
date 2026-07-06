@@ -1,0 +1,115 @@
+/* Global styles for the trading terminal — desktop stays inline-styled;
+   this file carries the base theme plus everything the mobile shell needs
+   (safe areas, touch targets, tab visibility) that inline styles can't do. */
+
+:root {
+  --bg: #0b0e14;
+  --panel: #0f1320;
+  --border: #1c2330;
+  --text: #d6deeb;
+  --accent: #7aa2f7;
+  --dim: #5c6773;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+select {
+  touch-action: manipulation;
+}
+
+/* ---- mobile shell ---------------------------------------------------- */
+
+/* Views stay mounted (websocket / SSE / pollers keep running) and are
+   toggled with display so only the active tab is visible. */
+.m-view {
+  display: none;
+}
+.m-view.active {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.m-main {
+  padding: 12px 12px calc(64px + var(--safe-bottom));
+  padding-top: calc(8px + var(--safe-top));
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.m-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--panel);
+  overflow-x: auto;
+}
+
+.m-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid var(--border);
+  background: rgba(11, 14, 20, 0.96);
+  backdrop-filter: blur(8px);
+  padding-bottom: var(--safe-bottom);
+}
+
+.m-nav button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0 6px;
+  min-height: 52px;
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.m-nav button.active {
+  color: var(--accent);
+}
+.m-nav .icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Bigger tap targets on touch devices without disturbing desktop. */
+@media (pointer: coarse) {
+  button {
+    min-height: 40px;
+  }
+  .m-nav button {
+    min-height: 52px;
+  }
+  input,
+  select {
+    min-height: 36px;
+    font-size: 14px;
+  }
+}
+
+/* Keep wide tables usable inside mobile panels. */
+.m-panel table {
+  min-width: 100%;
+}
