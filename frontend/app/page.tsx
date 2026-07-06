@@ -16,11 +16,13 @@ import useIsMobile from "@/lib/useIsMobile";
 
 type Health = { status: string; trading_mode: string; require_human_approval: boolean };
 
+// Theme values come from the :root variables in globals.css so the desktop
+// grid and the mobile .m-panel class can't drift apart.
 const panel: React.CSSProperties = {
-  border: "1px solid #1c2330",
+  border: "1px solid var(--border)",
   borderRadius: 8,
   padding: 16,
-  background: "#0f1320",
+  background: "var(--panel)",
   overflow: "auto",
 };
 
@@ -81,6 +83,21 @@ export default function Terminal() {
   // than mounting the wrong layout (sockets/pollers would start twice).
   if (isMobile === null) return null;
 
+  // Panels shared verbatim by both layouts — declared once so mobile and
+  // desktop can't silently drift. Watchlist is deliberately NOT shared:
+  // on mobile, selecting a symbol also jumps to the Chart tab.
+  const panels = {
+    search: <SymbolSearch onAdd={addSymbol} />,
+    chart: <PriceChart symbol={symbol} liveQuote={quotes[symbol]} />,
+    agent: <AgentConsole symbol={symbol} onProposed={bump} />,
+    approval: <ApprovalQueue refreshKey={refreshKey} onChange={bump} />,
+    positions: <Positions refreshKey={refreshKey} />,
+    analytics: <Analytics symbol={symbol} onSelect={addSymbol} />,
+    news: <News symbol={symbol} />,
+    alerts: <Alerts symbol={symbol} />,
+    fearGreed: <FearGreed />,
+  };
+
   if (isMobile) {
     // One view per bottom tab. Views stay MOUNTED and are hidden with CSS so
     // the quotes websocket, agent SSE stream and pollers survive tab switches.
@@ -112,9 +129,11 @@ export default function Terminal() {
         </header>
 
         <div className={view("markets")}>
-          <section className="m-panel">
+          {/* overflow visible: .m-panel's overflow-x:auto would turn the
+              panel into a scroll container and clip the search dropdown. */}
+          <section className="m-panel" style={{ overflow: "visible" }}>
             <h2 style={h2}>Watchlist</h2>
-            <SymbolSearch onAdd={addSymbol} />
+            {panels.search}
             <Watchlist
               symbols={watch}
               selected={symbol}
@@ -125,47 +144,47 @@ export default function Terminal() {
           </section>
           <section className="m-panel">
             <h2 style={h2}>Fear &amp; Greed</h2>
-            <FearGreed />
+            {panels.fearGreed}
           </section>
         </div>
 
         <div className={view("chart")}>
           <section className="m-panel">
             <h2 style={h2}>Chart</h2>
-            <PriceChart symbol={symbol} liveQuote={quotes[symbol]} />
+            {panels.chart}
           </section>
           <section className="m-panel">
             <h2 style={h2}>News — {symbol}</h2>
-            <News symbol={symbol} />
+            {panels.news}
           </section>
         </div>
 
         <div className={view("agent")}>
           <section className="m-panel">
             <h2 style={h2}>Agent Console — {symbol}</h2>
-            <AgentConsole symbol={symbol} onProposed={bump} />
+            {panels.agent}
           </section>
         </div>
 
         <div className={view("orders")}>
           <section className="m-panel">
             <h2 style={h2}>Approval Queue</h2>
-            <ApprovalQueue refreshKey={refreshKey} onChange={bump} />
+            {panels.approval}
           </section>
           <section className="m-panel">
             <h2 style={h2}>Positions &amp; P&amp;L</h2>
-            <Positions refreshKey={refreshKey} />
+            {panels.positions}
           </section>
           <section className="m-panel">
             <h2 style={h2}>Alerts</h2>
-            <Alerts symbol={symbol} />
+            {panels.alerts}
           </section>
         </div>
 
         <div className={view("analytics")}>
           <section className="m-panel">
             <h2 style={h2}>Analytics — {symbol}</h2>
-            <Analytics symbol={symbol} onSelect={addSymbol} />
+            {panels.analytics}
           </section>
         </div>
 
@@ -192,7 +211,7 @@ export default function Terminal() {
       >
         <section style={{ ...panel, gridArea: "watch" }}>
           <h2 style={h2}>Watchlist</h2>
-          <SymbolSearch onAdd={addSymbol} />
+          {panels.search}
           <Watchlist
             symbols={watch}
             selected={symbol}
@@ -200,46 +219,46 @@ export default function Terminal() {
             onQuotes={setQuotes}
             onRemove={removeSymbol}
           />
-          <FearGreed />
+          {panels.fearGreed}
         </section>
 
         <section style={{ ...panel, gridArea: "chart" }}>
           <h2 style={h2}>Chart</h2>
-          <PriceChart symbol={symbol} liveQuote={quotes[symbol]} />
+          {panels.chart}
         </section>
 
         <section style={{ ...panel, gridArea: "agents" }}>
           <h2 style={h2}>Agent Console</h2>
-          <AgentConsole symbol={symbol} onProposed={bump} />
+          {panels.agent}
         </section>
 
         <section style={{ ...panel, gridArea: "approval" }}>
           <h2 style={h2}>Approval Queue</h2>
-          <ApprovalQueue refreshKey={refreshKey} onChange={bump} />
+          {panels.approval}
         </section>
 
         <section style={{ ...panel, gridArea: "positions" }}>
           <h2 style={h2}>Positions &amp; P&amp;L</h2>
-          <Positions refreshKey={refreshKey} />
+          {panels.positions}
         </section>
 
         <section style={{ ...panel, gridArea: "analytics" }}>
           <h2 style={h2}>Analytics</h2>
-          <Analytics symbol={symbol} onSelect={addSymbol} />
+          {panels.analytics}
         </section>
 
         <section style={{ ...panel, gridArea: "news", maxHeight: 420 }}>
           <h2 style={h2}>News — {symbol}</h2>
-          <News symbol={symbol} />
+          {panels.news}
         </section>
 
         <section style={{ ...panel, gridArea: "alerts" }}>
           <h2 style={h2}>Alerts</h2>
-          <Alerts symbol={symbol} />
+          {panels.alerts}
         </section>
       </div>
     </main>
   );
 }
 
-const h2: React.CSSProperties = { fontSize: 13, margin: "0 0 10px", color: "#7aa2f7" };
+const h2: React.CSSProperties = { fontSize: 13, margin: "0 0 10px", color: "var(--accent)" };

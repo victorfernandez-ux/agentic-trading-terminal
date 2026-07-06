@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createChart, type IChartApi } from "lightweight-charts";
 import type { Quote } from "@/components/Watchlist";
+import { observeChartWidth } from "@/lib/chartWidth";
 
 type Bar = { t: number | string; o: number; h: number; l: number; c: number; v: number };
 
@@ -29,7 +30,6 @@ export default function PriceChart({ symbol, liveQuote }: { symbol: string; live
       wickUpColor: "#8fd694", wickDownColor: "#f7768e", borderVisible: false,
     });
 
-    let hasData = false;
     const enc = encodeURIComponent(symbol);
     fetch(`/api/market/bars?symbol=${enc}&timeframe=1D&limit=120`)
       .then((r) => r.json())
@@ -44,26 +44,12 @@ export default function PriceChart({ symbol, liveQuote }: { symbol: string; live
           .sort((a, b) => (a.time as number) - (b.time as number));
         series.setData(candles);
         chart.timeScale().fitContent();
-        hasData = true;
         setStatus(`${bars.length} bars · ${data.provider}`);
       })
       .catch(() => setStatus("backend offline"));
 
-    // ResizeObserver (not window.resize): the container starts at width 0
-    // when this chart lives in a hidden mobile tab and only gets a real
-    // width once the tab is shown.
-    let lastWidth = 0;
-    const onResize = () => {
-      const w = el.clientWidth;
-      if (w <= 0) return;
-      chart.applyOptions({ width: w });
-      if (lastWidth === 0 && hasData) chart.timeScale().fitContent();
-      lastWidth = w;
-    };
-    onResize();
-    const ro = new ResizeObserver(onResize);
-    ro.observe(el);
-    return () => { ro.disconnect(); chart.remove(); };
+    const unobserve = observeChartWidth(el, chart);
+    return () => { unobserve(); chart.remove(); };
   }, [symbol]);
 
   const up = (liveQuote?.pct_change ?? 0) >= 0;

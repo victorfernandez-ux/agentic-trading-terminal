@@ -94,7 +94,10 @@ select {
   line-height: 1;
 }
 
-/* Bigger tap targets on touch devices without disturbing desktop. */
+/* Bigger tap targets on touch devices without disturbing desktop.
+   16px minimum on text inputs: anything smaller makes iOS Safari auto-zoom
+   the viewport on focus (!important because components inline-style their
+   font sizes). */
 @media (pointer: coarse) {
   button {
     min-height: 40px;
@@ -105,7 +108,7 @@ select {
   input,
   select {
     min-height: 36px;
-    font-size: 14px;
+    font-size: 16px !important;
   }
 }
 

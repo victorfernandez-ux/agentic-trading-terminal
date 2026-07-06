@@ -80,7 +80,8 @@ setState-in-render error — gone, verified in console), `suppressHydrationWarni
 (`GET /orders/positions/all?portfolio_id=`). The duplicate implementations of debate/auth/
 portfolios on that branch were NOT merged (main's tested versions won); one-off .bat helpers stay
 on the rescue branch. Backend tests: 185 (`tests/test_sentiment.py`).
-**v1.10 (July 6, 2026):** mobile app (installable PWA + phone UI; frontend-only, backend untouched).
+**v1.10 (July 6, 2026):** mobile app (installable PWA + phone UI; frontend + a one-line ruff F401
+fix in `backend/tests/test_hardening.py` — backend behavior untouched).
 (a) PWA: `app/manifest.ts` (standalone display, generated candlestick icons incl. maskable in
 `public/icons/`), viewport/theme-color/apple-web-app metadata in `layout.tsx`, conservative service
 worker `public/sw.js` (registered in production only; NEVER caches `/api/*` or `/ws/*` — market data
@@ -93,7 +94,14 @@ symbol jumps to the Chart tab. Desktop grid is unchanged (still inline-styled). 
 ResizeObserver (hidden tabs mount at width 0 and get sized when shown, with a fitContent on first
 reveal). (d) Deployment knobs for real phones: `BACKEND_URL` env drives the `/api` rewrite
 (next.config.mjs), `NEXT_PUBLIC_WS_BASE` overrides the quotes-WS host (Watchlist) — defaults keep
-dev behavior (localhost:8000). Gotcha: body styles moved from layout.tsx inline to globals.css.
+dev behavior (localhost:8000). Gotchas: BOTH env knobs are read at `next build` time (rewrites are
+compiled into routes-manifest.json; NEXT_PUBLIC_* is inlined) — setting them at `next start` does
+nothing, rebuild after changing; body styles moved from layout.tsx inline to globals.css. Post-review
+hardening: SW only caches `res.ok` responses and only saves "/" as the offline shell (no more
+404/502 cache-poisoning), 16px inputs on touch (kills iOS focus auto-zoom), shared
+`lib/chartWidth.ts` for the hidden-tab chart sizing, panels declared once in page.tsx for both
+layouts, AgentConsole closes its SSE stream on unmount, `start-mobile.bat` now `call`s
+start-backend-logged.bat (which ends `exit /b`).
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README

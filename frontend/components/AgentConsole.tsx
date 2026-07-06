@@ -5,7 +5,7 @@
  * LangGraph engine), falling back to the one-shot POST if the stream fails.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Result = {
   symbol: string;
@@ -44,6 +44,12 @@ export default function AgentConsole({
   const [result, setResult] = useState<Result | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
+
+  // Close a live SSE stream if the console unmounts mid-run (e.g. the
+  // mobile/desktop layout swaps when the viewport crosses the breakpoint);
+  // otherwise the EventSource keeps the connection open and auto-reconnects
+  // forever, firing setState on a dead component.
+  useEffect(() => () => esRef.current?.close(), []);
 
   function finish(j: Result) {
     setResult(j);

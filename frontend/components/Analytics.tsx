@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createChart, type IChartApi } from "lightweight-charts";
+import { observeChartWidth } from "@/lib/chartWidth";
 
 const TABS = ["Signal", "Risk", "Backtest", "DCF", "Personas", "Options", "Screener"] as const;
 type Tab = (typeof TABS)[number];
@@ -457,21 +458,9 @@ function EquityChart({ points }: { points: { t: number; equity: number }[] }) {
       points.map((p) => ({ time: Math.floor(p.t / 1000) as never, value: p.equity }))
     );
     chart.timeScale().fitContent();
-    // ResizeObserver: the container can start hidden (width 0) inside a
-    // mobile tab and only gain a width when the tab becomes visible.
-    let lastWidth = 0;
-    const onResize = () => {
-      const w = el.clientWidth;
-      if (w <= 0) return;
-      chart.applyOptions({ width: w });
-      if (lastWidth === 0) chart.timeScale().fitContent();
-      lastWidth = w;
-    };
-    onResize();
-    const ro = new ResizeObserver(onResize);
-    ro.observe(el);
+    const unobserve = observeChartWidth(el, chart);
     return () => {
-      ro.disconnect();
+      unobserve();
       chart.remove();
     };
   }, [points]);

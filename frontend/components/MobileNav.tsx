@@ -3,7 +3,7 @@
 export type MobileTab = "markets" | "chart" | "agent" | "orders" | "analytics";
 
 // ︎ forces text-style rendering so icons stay monochrome on iOS.
-export const MOBILE_TABS: { id: MobileTab; icon: string; label: string }[] = [
+const MOBILE_TABS: { id: MobileTab; icon: string; label: string }[] = [
   { id: "markets", icon: "☰", label: "Markets" },
   { id: "chart", icon: "∿", label: "Chart" },
   { id: "agent", icon: "⚙︎", label: "Agent" },

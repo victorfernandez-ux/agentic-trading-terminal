@@ -1,11 +1,14 @@
 /* Service worker for the Agentic Trading Terminal PWA.
  *
  * Deliberately conservative for a trading app:
- *  - /api/* and websockets are NEVER cached — market data must be live.
+ *  - /api/* is NEVER cached — market data must be live. (WebSocket upgrades
+ *    never hit the fetch handler, so /ws/ needs no guard.)
  *  - Static assets (_next/static, icons) are cache-first: they are content-
- *    hashed, so once fetched they are immutable.
- *  - Navigations are network-first with a cached fallback, so the shell
- *    still opens when the device is briefly offline.
+ *    hashed, so once fetched they are immutable. Only 2xx responses are
+ *    cached — a 404/502 during a deploy window must not be pinned forever.
+ *  - Navigations are network-first; only a successful response for "/" is
+ *    saved as the offline shell (a 404 or error page for any other path
+ *    must not overwrite it).
  */
 const CACHE = "att-shell-v1";
 
@@ -28,7 +31,7 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/ws/")) return;
+  if (url.pathname.startsWith("/api/")) return;
 
   // Immutable build assets and icons: cache-first.
   if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
@@ -37,8 +40,10 @@ self.addEventListener("fetch", (event) => {
         (hit) =>
           hit ||
           fetch(req).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(CACHE).then((c) => c.put(req, copy));
+            }
             return res;
           })
       )
@@ -51,8 +56,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put("/", copy));
+          if (res.ok && url.pathname === "/") {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put("/", copy));
+          }
           return res;
         })
         .catch(() => caches.match("/"))

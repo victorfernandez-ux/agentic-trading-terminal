@@ -76,8 +76,9 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
         // NEXT_PUBLIC_WS_BASE overrides for phones/PWA installs that can't
         // reach the backend on the page host's :8000 (e.g. wss://api.example.com).
         const proto = window.location.protocol === "https:" ? "wss" : "ws";
+        // || (not ??): an empty-string env value must fall through too.
         const base =
-          process.env.NEXT_PUBLIC_WS_BASE ?? `${proto}://${window.location.hostname}:8000`;
+          process.env.NEXT_PUBLIC_WS_BASE || `${proto}://${window.location.hostname}:8000`;
         const qs = encodeURIComponent(symbols.join(","));
         ws = new WebSocket(`${base}/ws/quotes?symbols=${qs}`);
         ws.onopen = () => {

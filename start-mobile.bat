@@ -16,13 +16,8 @@ if errorlevel 1 (
   exit /b 1
 )
 
-rem --- backend (same steps as start-backend-logged.bat; can't `call` it, it ends with a hard exit) ---
-cd /d "%~dp0backend"
-if not exist ..\.private mkdir ..\.private
-powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name like 'python%%'\" | Where-Object { $_.CommandLine -match 'uvicorn' -or ($_.CommandLine -match 'multiprocessing-fork' -and $_.CommandLine -match 'Python314') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction Continue }"
-timeout /t 2 /nobreak >nul
-set DATABASE_URL=sqlite:///./terminal.db
-start "ATT Backend" /min cmd /c ".\.venv\Scripts\python.exe -X utf8 -m uvicorn app.main:app --port 8000 --log-level info > ..\.private\backend.log 2>&1"
+rem --- backend: the canonical start script (zombie-kill + uvicorn + log) ---
+call "%~dp0start-backend-logged.bat"
 
 rem --- frontend: production build (next dev never registers the service worker) ---
 cd /d "%~dp0frontend"
