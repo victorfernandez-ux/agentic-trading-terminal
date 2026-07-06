@@ -102,6 +102,16 @@ hardening: SW only caches `res.ok` responses and only saves "/" as the offline s
 `lib/chartWidth.ts` for the hidden-tab chart sizing, panels declared once in page.tsx for both
 layouts, AgentConsole closes its SSE stream on unmount, `start-mobile.bat` now `call`s
 start-backend-logged.bat (which ends `exit /b`).
+**v1.11 (July 6, 2026):** frontend auth + lockdown knobs, so a tunneled/hosted mobile instance can
+run with API_TOKEN set. Backend: auth middleware also accepts `?token=` (EventSource can't set
+headers — SSE agent streaming was impossible under auth), `CORS_ORIGINS` env (comma-separated,
+default `http://localhost:3000`). Frontend: `lib/api.ts` (`apiFetch` adds `Authorization: Bearer`
+from localStorage `att.token.v1`, fires an `att:unauthorized` window event on any 401; `tokenized()`
+appends `?token=` for the quotes WS + agent SSE); every component fetch goes through `apiFetch`;
+page.tsx shows a 🔒 token-gate input under the header on 401 and reloads after unlock. With no
+token set anywhere, behavior is identical to before. Also hardened `.error` rendering in
+News/Analytics (the 401 envelope is an object — rendering it crashed React, found in verification).
+Backend tests: 186 (`test_locked_api_accepts_query_token`).
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README

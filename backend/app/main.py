@@ -47,10 +47,11 @@ app = FastAPI(
     description="AI agents research and prepare trades; the human approves every live order.",
 )
 
-# Dev CORS — lock this down before any non-local deployment.
+# CORS: dev default is the local Next frontend; set CORS_ORIGINS
+# (comma-separated) when a frontend is served from another origin.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,12 +75,16 @@ AUTH_EXEMPT_PATHS = ("/health", "/")
 async def require_api_token(request: Request, call_next):
     """Single-user token auth (groundwork). Disabled unless API_TOKEN is
     set; then every endpoint except AUTH_EXEMPT_PATHS needs
-    'Authorization: Bearer <token>'. Registered after the session
-    middleware so it runs first — rejected requests never open a session.
-    WS auth is handled in the endpoint (app/api/stream.py, ?token=)."""
+    'Authorization: Bearer <token>' — or ?token=<token>, for clients that
+    can't set headers (the SSE EventSource in AgentConsole; WS auth is
+    handled in the endpoint, app/api/stream.py). Registered after the
+    session middleware so it runs first — rejected requests never open a
+    session."""
     token = settings.api_token
     if token and request.url.path not in AUTH_EXEMPT_PATHS:
-        if request.headers.get("authorization") != f"Bearer {token}":
+        header_ok = request.headers.get("authorization") == f"Bearer {token}"
+        query_ok = request.query_params.get("token") == token
+        if not (header_ok or query_ok):
             return JSONResponse(status_code=401,
                                 content=_error_body(401, "missing or invalid API token"))
     return await call_next(request)

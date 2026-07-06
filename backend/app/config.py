@@ -37,8 +37,13 @@ class Settings(BaseSettings):
     require_human_approval: bool = True
     # Single-user token auth. Unset (default) -> auth disabled for local
     # dev. Set API_TOKEN -> every endpoint except /health and / requires
-    # "Authorization: Bearer <token>" (WS: ?token=<token>).
+    # "Authorization: Bearer <token>"; ?token=<token> is accepted too for
+    # clients that can't set headers (WS, SSE EventSource).
     api_token: str | None = None
+    # Comma-separated browser origins allowed by CORS. Only matters when a
+    # frontend is served from a different origin than this API (the Next
+    # rewrite proxy keeps everything same-origin in the default setup).
+    cors_origins: str = "http://localhost:3000"
     # Alert->research loop: max automatic agent runs per rolling hour across
     # all alerts. Proposals only -- the human approval gate is untouched.
     alert_auto_research_per_hour: int = 4

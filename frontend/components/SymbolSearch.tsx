@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type Hit = { symbol: string; name: string; exchange: string; type: string };
 
@@ -26,7 +27,7 @@ export default function SymbolSearch({ onAdd }: { onAdd: (symbol: string) => voi
     const t = setTimeout(async () => {
       setBusy(true);
       try {
-        const r = await fetch(`/api/market/search?q=${encodeURIComponent(q.trim())}&limit=8`);
+        const r = await apiFetch(`/api/market/search?q=${encodeURIComponent(q.trim())}&limit=8`);
         const j = await r.json();
         setHits(j.results ?? []);
         setOpen(true);

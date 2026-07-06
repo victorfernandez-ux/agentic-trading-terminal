@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { apiFetch, tokenized } from "@/lib/api";
 
 export type Quote = {
   symbol: string;
@@ -56,7 +57,7 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
         const results = await Promise.all(
           symbols.map(async (s) => {
             try {
-              const r = await fetch(`/api/market/quote?symbol=${encodeURIComponent(s)}`);
+              const r = await apiFetch(`/api/market/quote?symbol=${encodeURIComponent(s)}`);
               return (await r.json()) as Quote;
             } catch {
               return { symbol: s, price: null, pct_change: null } as Quote;
@@ -80,7 +81,7 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
         const base =
           process.env.NEXT_PUBLIC_WS_BASE || `${proto}://${window.location.hostname}:8000`;
         const qs = encodeURIComponent(symbols.join(","));
-        ws = new WebSocket(`${base}/ws/quotes?symbols=${qs}`);
+        ws = new WebSocket(tokenized(`${base}/ws/quotes?symbols=${qs}`));
         ws.onopen = () => {
           if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
           setMode("live");

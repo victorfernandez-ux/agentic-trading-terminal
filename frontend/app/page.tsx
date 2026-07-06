@@ -13,6 +13,7 @@ import Alerts from "@/components/Alerts";
 import FearGreed from "@/components/FearGreed";
 import MobileNav, { type MobileTab } from "@/components/MobileNav";
 import useIsMobile from "@/lib/useIsMobile";
+import { apiFetch, getToken, setToken, UNAUTHORIZED_EVENT } from "@/lib/api";
 
 type Health = { status: string; trading_mode: string; require_human_approval: boolean };
 
@@ -64,13 +65,80 @@ export default function Terminal() {
   };
 
   useEffect(() => {
-    fetch("/api/health")
+    apiFetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)
       .catch(() => setErr("backend offline — start uvicorn on :8000"));
   }, []);
 
+  // Token gate: any component's apiFetch hitting a 401 (backend has
+  // API_TOKEN set) raises this event; we show an unlock input in the header.
+  const [needsToken, setNeedsToken] = useState(false);
+  useEffect(() => {
+    const onUnauthorized = () => setNeedsToken(true);
+    window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorized);
+  }, []);
+  const unlock = (token: string) => {
+    if (!token.trim()) return;
+    setToken(token.trim());
+    location.reload(); // simplest way to restart every socket/poller with auth
+  };
+
   const bump = () => setRefreshKey((k) => k + 1);
+
+  const tokenGate = needsToken && (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        unlock(new FormData(e.currentTarget).get("token") as string);
+      }}
+      style={{
+        display: "flex",
+        gap: 8,
+        alignItems: "center",
+        border: "1px solid var(--border)",
+        borderRadius: 8,
+        padding: "10px 12px",
+        background: "var(--panel)",
+        fontSize: 12,
+      }}
+    >
+      <span style={{ color: "#e0af68" }}>🔒 API token required</span>
+      <input
+        name="token"
+        type="password"
+        defaultValue={getToken()}
+        placeholder="paste API_TOKEN"
+        autoComplete="off"
+        style={{
+          flex: 1,
+          minWidth: 80,
+          background: "var(--bg)",
+          color: "var(--text)",
+          border: "1px solid var(--border)",
+          borderRadius: 6,
+          padding: "6px 8px",
+          fontFamily: "inherit",
+        }}
+      />
+      <button
+        type="submit"
+        style={{
+          background: "#1f2a44",
+          color: "var(--accent)",
+          border: "1px solid var(--border)",
+          borderRadius: 6,
+          padding: "6px 12px",
+          cursor: "pointer",
+          fontFamily: "inherit",
+          fontSize: 12,
+        }}
+      >
+        unlock
+      </button>
+    </form>
+  );
 
   const healthLine = health
     ? `● ${health.status} · mode: ${health.trading_mode} · approval: ${
@@ -127,6 +195,8 @@ export default function Terminal() {
             {healthLine}
           </span>
         </header>
+
+        {tokenGate}
 
         <div className={view("markets")}>
           {/* overflow visible: .m-panel's overflow-x:auto would turn the
@@ -199,6 +269,8 @@ export default function Terminal() {
         <h1 style={{ fontSize: 18, margin: 0 }}>⚡ Agentic Trading Terminal</h1>
         <span style={{ fontSize: 12, color: healthColor }}>{healthLine}</span>
       </header>
+
+      {tokenGate}
 
       <div
         style={{

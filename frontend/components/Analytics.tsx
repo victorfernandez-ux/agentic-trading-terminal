@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { createChart, type IChartApi } from "lightweight-charts";
 import { observeChartWidth } from "@/lib/chartWidth";
 
@@ -65,17 +66,17 @@ export default function Analytics({
     try {
       let res: Response;
       if (tab === "Signal") {
-        res = await fetch(`/api/analytics/indicators?symbol=${encodeURIComponent(symbol)}&limit=200`);
+        res = await apiFetch(`/api/analytics/indicators?symbol=${encodeURIComponent(symbol)}&limit=200`);
       } else if (tab === "Risk") {
-        res = await fetch(`/api/analytics/risk?symbol=${encodeURIComponent(symbol)}&benchmark=SPY`);
+        res = await apiFetch(`/api/analytics/risk?symbol=${encodeURIComponent(symbol)}&benchmark=SPY`);
       } else if (tab === "Backtest") {
-        res = await fetch(`/api/analytics/backtest`, {
+        res = await apiFetch(`/api/analytics/backtest`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ symbol, strategy, limit: 365 }),
         });
       } else if (tab === "DCF") {
-        res = await fetch(`/api/analytics/dcf`, {
+        res = await apiFetch(`/api/analytics/dcf`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -89,18 +90,18 @@ export default function Analytics({
           }),
         });
       } else if (tab === "Personas") {
-        res = await fetch(`/api/analytics/personas`, {
+        res = await apiFetch(`/api/analytics/personas`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ symbol, fundamentals: {} }),
         });
       } else if (tab === "Options") {
         const exp = expiration ? `&expiration=${expiration}` : "";
-        res = await fetch(
+        res = await apiFetch(
           `/api/analytics/options/chain?symbol=${encodeURIComponent(symbol)}&strikes_around=10${exp}`
         );
       } else {
-        res = await fetch(
+        res = await apiFetch(
           `/api/analytics/screener?screen=${screen}&universe=${universe}&top=15`
         );
       }
@@ -257,7 +258,11 @@ export default function Analytics({
       )}
 
       {busy && !data && <p style={{ color: dim }}>computing…</p>}
-      {d.error && <p style={{ color: red }}>{String(d.error)}</p>}
+      {d.error && (
+        <p style={{ color: red }}>
+          {typeof d.error === "string" ? d.error : d.error?.message ?? "request failed"}
+        </p>
+      )}
 
       {tab === "Signal" && d.signal && (
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>

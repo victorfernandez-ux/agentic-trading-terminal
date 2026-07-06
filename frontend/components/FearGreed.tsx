@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type FG = {
   market: string;
@@ -111,7 +112,7 @@ export default function FearGreed() {
   const load = useCallback(async () => {
     const get = async (m: string): Promise<FG> => {
       try {
-        const r = await fetch(`/api/analytics/sentiment/fear-greed?market=${m}`);
+        const r = await apiFetch(`/api/analytics/sentiment/fear-greed?market=${m}`);
         return await r.json();
       } catch {
         return { market: m, error: "offline" };

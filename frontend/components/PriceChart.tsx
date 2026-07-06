@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { createChart, type IChartApi } from "lightweight-charts";
 import type { Quote } from "@/components/Watchlist";
 import { observeChartWidth } from "@/lib/chartWidth";
@@ -31,7 +32,7 @@ export default function PriceChart({ symbol, liveQuote }: { symbol: string; live
     });
 
     const enc = encodeURIComponent(symbol);
-    fetch(`/api/market/bars?symbol=${enc}&timeframe=1D&limit=120`)
+    apiFetch(`/api/market/bars?symbol=${enc}&timeframe=1D&limit=120`)
       .then((r) => r.json())
       .then((data) => {
         const bars: Bar[] = data.bars ?? [];

@@ -44,6 +44,13 @@ def test_locked_api_accepts_bearer_token(locked):
     assert c.get("/alerts", headers=_auth()).status_code == 200
 
 
+def test_locked_api_accepts_query_token(locked):
+    # EventSource (SSE) can't set headers — ?token= must work everywhere.
+    c = TestClient(app)
+    assert c.get(f"/orders?token={TOKEN}").status_code == 200
+    assert c.get("/orders?token=nope").status_code == 401
+
+
 def test_health_and_root_stay_open_when_locked(locked):
     c = TestClient(app)
     assert c.get("/health").status_code == 200
