@@ -125,19 +125,7 @@ export default function Analytics({
     <div style={{ fontSize: 12 }}>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              background: tab === t ? "#1f2a44" : "transparent",
-              color: tab === t ? blue : dim,
-              border: "1px solid #1c2330",
-              borderRadius: 6,
-              padding: "3px 10px",
-              cursor: "pointer",
-              fontSize: 12,
-            }}
-          >
+          <button key={t} onClick={() => setTab(t)} className={`tab${tab === t ? " active" : ""}`}>
             {t}
           </button>
         ))}
@@ -146,12 +134,12 @@ export default function Analytics({
 
       {tab === "Backtest" && (
         <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-          <select value={strategy} onChange={(e) => setStrategy(e.target.value)} style={selectStyle}>
+          <select value={strategy} onChange={(e) => setStrategy(e.target.value)} className="select">
             <option value="sma_cross">SMA cross (10/30)</option>
             <option value="rsi_reversion">RSI reversion</option>
             <option value="buy_hold">Buy & hold</option>
           </select>
-          <button onClick={run} disabled={busy} style={runBtn}>{busy ? "running…" : "Run backtest"}</button>
+          <button onClick={run} disabled={busy} className="btn">{busy ? "running…" : "Run backtest"}</button>
         </div>
       )}
 
@@ -174,17 +162,18 @@ export default function Analytics({
                 value={dcf[key]}
                 step="0.5"
                 onChange={(e) => setDcf({ ...dcf, [key]: Number(e.target.value) })}
-                style={inputStyle}
+                className="input num"
+                style={{ width: 64 }}
               />
             </label>
           ))}
-          <button onClick={run} disabled={busy} style={runBtn}>{busy ? "valuing…" : "Value it"}</button>
+          <button onClick={run} disabled={busy} className="btn">{busy ? "valuing…" : "Value it"}</button>
         </div>
       )}
 
       {tab === "Screener" && (
         <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-          <select value={screen} onChange={(e) => setScreen(e.target.value)} style={selectStyle}>
+          <select value={screen} onChange={(e) => setScreen(e.target.value)} className="select">
             <option value="composite_bullish">Composite bullish</option>
             <option value="composite_bearish">Composite bearish</option>
             <option value="rsi_oversold">RSI oversold</option>
@@ -195,14 +184,14 @@ export default function Analytics({
             <option value="near_52w_high">Near 52w high</option>
             <option value="unusual_volume">Unusual volume</option>
           </select>
-          <select value={universe} onChange={(e) => setUniverse(e.target.value)} style={selectStyle}>
+          <select value={universe} onChange={(e) => setUniverse(e.target.value)} className="select">
             <option value="sp100">S&P 100</option>
             <option value="indices">Global indices</option>
             <option value="fx">FX majors</option>
             <option value="futures">Futures</option>
             <option value="crypto">Crypto</option>
           </select>
-          <button onClick={run} disabled={busy} style={runBtn}>
+          <button onClick={run} disabled={busy} className="btn">
             {busy ? "scanning…" : "Scan"}
           </button>
           {d.scanned !== undefined && (
@@ -229,6 +218,7 @@ export default function Analytics({
               <tr
                 key={m.symbol}
                 onClick={() => onSelect?.(m.symbol)}
+                className="tr-hover num"
                 style={{ cursor: onSelect ? "pointer" : undefined }}
                 title="click to load in the terminal"
               >
@@ -250,7 +240,7 @@ export default function Analytics({
       )}
 
       {tab === "Personas" && !data && (
-        <button onClick={run} disabled={busy} style={{ ...runBtn, marginBottom: 8 }}>
+        <button onClick={run} disabled={busy} className="btn" style={{ marginBottom: 8 }}>
           {busy ? "consulting…" : "Consult the legends"}
         </button>
       )}
@@ -350,7 +340,7 @@ export default function Analytics({
             <select
               value={d.expiration ?? ""}
               onChange={(e) => setExpiration(Number(e.target.value))}
-              style={selectStyle}
+              className="select"
             >
               {(d.expirations ?? []).map((x: number) => (
                 <option key={x} value={x}>
@@ -376,7 +366,7 @@ export default function Analytics({
                 const atm = Math.abs(c.strike - d.spot) ===
                   Math.min(...(d.calls ?? []).map((x: any) => Math.abs(x.strike - d.spot)));
                 return (
-                  <tr key={i} style={{ background: atm ? "#16203a" : undefined }}>
+                  <tr key={i} className="tr-hover num" style={{ background: atm ? "#16203a" : undefined }}>
                     <td style={{ ...cell, color: c.itm ? green : undefined }}>
                       {c.bid ?? "—"}/{c.ask ?? "—"}
                     </td>
@@ -494,13 +484,3 @@ function TradeList({ trades }: { trades: any[] }) {
     </table>
   );
 }
-
-const selectStyle: React.CSSProperties = {
-  background: "#0f1320", color: "#c0caf5", border: "1px solid #1c2330",
-  borderRadius: 6, padding: "3px 6px", fontSize: 12,
-};
-const inputStyle: React.CSSProperties = { ...selectStyle, width: 64 };
-const runBtn: React.CSSProperties = {
-  background: "#1f2a44", color: "#7aa2f7", border: "1px solid #1c2330",
-  borderRadius: 6, padding: "3px 12px", cursor: "pointer", fontSize: 12,
-};
