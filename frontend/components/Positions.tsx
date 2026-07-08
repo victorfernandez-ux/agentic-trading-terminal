@@ -41,7 +41,7 @@ export default function Positions({ refreshKey }: { refreshKey: number }) {
   const totalPnl = rows.reduce((s, r) => s + (r.unrealized_pnl ?? 0), 0);
 
   return (
-    <div style={{ fontSize: 12 }}>
+    <div className="num" style={{ fontSize: 12 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 0.7fr 0.9fr 1fr", gap: 4, color: "#5c6773", paddingBottom: 4 }}>
         <span>Symbol</span><span>Qty</span><span>Avg→Last</span><span style={{ textAlign: "right" }}>uP&L</span>
       </div>
@@ -49,7 +49,7 @@ export default function Positions({ refreshKey }: { refreshKey: number }) {
         const up = (r.unrealized_pnl ?? 0) >= 0;
         const color = up ? "#8fd694" : "#f7768e";
         return (
-          <div key={r.symbol} style={{ display: "grid", gridTemplateColumns: "1fr 0.7fr 0.9fr 1fr", gap: 4, padding: "4px 0", borderTop: "1px solid #1c2330" }}>
+          <div key={r.symbol} className="tr-hover" style={{ display: "grid", gridTemplateColumns: "1fr 0.7fr 0.9fr 1fr", gap: 4, padding: "4px 0", borderTop: "1px solid #1c2330" }}>
             <span style={{ color: "#d6deeb" }}>{r.symbol}</span>
             <span style={{ color: "#9aa5b1" }}>{r.qty}</span>
             <span style={{ color: "#9aa5b1" }}>

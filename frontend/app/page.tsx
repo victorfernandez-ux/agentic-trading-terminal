@@ -17,16 +17,6 @@ import { apiFetch, getToken, setToken, UNAUTHORIZED_EVENT } from "@/lib/api";
 
 type Health = { status: string; trading_mode: string; require_human_approval: boolean };
 
-// Theme values come from the :root variables in globals.css so the desktop
-// grid and the mobile .m-panel class can't drift apart.
-const panel: React.CSSProperties = {
-  border: "1px solid var(--border)",
-  borderRadius: 8,
-  padding: 16,
-  background: "var(--panel)",
-  overflow: "auto",
-};
-
 const DEFAULT_WATCH = ["BTC/USD", "ETH/USD", "SOL/USD", "AAPL", "NVDA", "SPY"];
 const WATCH_KEY = "att.watchlist.v1";
 
@@ -199,10 +189,10 @@ export default function Terminal() {
         {tokenGate}
 
         <div className={view("markets")}>
-          {/* overflow visible: .m-panel's overflow-x:auto would turn the
-              panel into a scroll container and clip the search dropdown. */}
-          <section className="m-panel" style={{ overflow: "visible" }}>
-            <h2 style={h2}>Watchlist</h2>
+          {/* overflow visible: .panel's overflow:auto would turn the panel
+              into a scroll container and clip the search dropdown. */}
+          <section className="panel" style={{ overflow: "visible" }}>
+            <h2 className="panel-title">Watchlist</h2>
             {panels.search}
             <Watchlist
               symbols={watch}
@@ -212,48 +202,48 @@ export default function Terminal() {
               onRemove={removeSymbol}
             />
           </section>
-          <section className="m-panel">
-            <h2 style={h2}>Fear &amp; Greed</h2>
+          <section className="panel">
+            <h2 className="panel-title">Fear &amp; Greed</h2>
             {panels.fearGreed}
           </section>
         </div>
 
         <div className={view("chart")}>
-          <section className="m-panel">
-            <h2 style={h2}>Chart</h2>
+          <section className="panel">
+            <h2 className="panel-title">Chart</h2>
             {panels.chart}
           </section>
-          <section className="m-panel">
-            <h2 style={h2}>News — {symbol}</h2>
+          <section className="panel">
+            <h2 className="panel-title">News — {symbol}</h2>
             {panels.news}
           </section>
         </div>
 
         <div className={view("agent")}>
-          <section className="m-panel">
-            <h2 style={h2}>Agent Console — {symbol}</h2>
+          <section className="panel">
+            <h2 className="panel-title">Agent Console — {symbol}</h2>
             {panels.agent}
           </section>
         </div>
 
         <div className={view("orders")}>
-          <section className="m-panel">
-            <h2 style={h2}>Approval Queue</h2>
+          <section className="panel">
+            <h2 className="panel-title">Approval Queue</h2>
             {panels.approval}
           </section>
-          <section className="m-panel">
-            <h2 style={h2}>Positions &amp; P&amp;L</h2>
+          <section className="panel">
+            <h2 className="panel-title">Positions &amp; P&amp;L</h2>
             {panels.positions}
           </section>
-          <section className="m-panel">
-            <h2 style={h2}>Alerts</h2>
+          <section className="panel">
+            <h2 className="panel-title">Alerts</h2>
             {panels.alerts}
           </section>
         </div>
 
         <div className={view("analytics")}>
-          <section className="m-panel">
-            <h2 style={h2}>Analytics — {symbol}</h2>
+          <section className="panel">
+            <h2 className="panel-title">Analytics — {symbol}</h2>
             {panels.analytics}
           </section>
         </div>
@@ -264,25 +254,29 @@ export default function Terminal() {
   }
 
   return (
-    <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ fontSize: 18, margin: 0 }}>⚡ Agentic Trading Terminal</h1>
-        <span style={{ fontSize: 12, color: healthColor }}>{healthLine}</span>
+    <main className="shell">
+      <header className="masthead">
+        <div className="brand">
+          <h1>
+            <span className="bolt">⚡</span> Agentic Trading Terminal
+          </h1>
+          <span className="brand-sub">agents propose · you approve · paper fills</span>
+        </div>
+        <span className="status-pill">
+          <span className={`status-dot ${health ? "ok" : err ? "err" : "warn"}`} />
+          {health
+            ? `${health.status} · mode: ${health.trading_mode} · approval: ${
+                health.require_human_approval ? "required" : "off"
+              }`
+            : err ?? "connecting…"}
+        </span>
       </header>
 
       {tokenGate}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "200px 1.3fr 340px",
-          gridTemplateRows: "minmax(320px, auto) auto auto auto",
-          gridTemplateAreas: `"watch chart approval" "watch agents positions" "watch analytics news" "watch alerts alerts"`,
-          gap: 16,
-        }}
-      >
-        <section style={{ ...panel, gridArea: "watch" }}>
-          <h2 style={h2}>Watchlist</h2>
+      <div className="terminal-grid">
+        <section className="panel" style={{ gridArea: "watch" }}>
+          <h2 className="panel-title">Watchlist</h2>
           {panels.search}
           <Watchlist
             symbols={watch}
@@ -294,43 +288,45 @@ export default function Terminal() {
           {panels.fearGreed}
         </section>
 
-        <section style={{ ...panel, gridArea: "chart" }}>
-          <h2 style={h2}>Chart</h2>
+        <section className="panel" style={{ gridArea: "chart" }}>
+          <h2 className="panel-title">
+            Chart <span className="title-meta">{symbol}</span>
+          </h2>
           {panels.chart}
         </section>
 
-        <section style={{ ...panel, gridArea: "agents" }}>
-          <h2 style={h2}>Agent Console</h2>
+        <section className="panel" style={{ gridArea: "agents" }}>
+          <h2 className="panel-title">Agent Console</h2>
           {panels.agent}
         </section>
 
-        <section style={{ ...panel, gridArea: "approval" }}>
-          <h2 style={h2}>Approval Queue</h2>
+        <section className="panel" style={{ gridArea: "approval" }}>
+          <h2 className="panel-title">Approval Queue</h2>
           {panels.approval}
         </section>
 
-        <section style={{ ...panel, gridArea: "positions" }}>
-          <h2 style={h2}>Positions &amp; P&amp;L</h2>
+        <section className="panel" style={{ gridArea: "positions" }}>
+          <h2 className="panel-title">Positions &amp; P&amp;L</h2>
           {panels.positions}
         </section>
 
-        <section style={{ ...panel, gridArea: "analytics" }}>
-          <h2 style={h2}>Analytics</h2>
+        <section className="panel" style={{ gridArea: "analytics" }}>
+          <h2 className="panel-title">Analytics</h2>
           {panels.analytics}
         </section>
 
-        <section style={{ ...panel, gridArea: "news", maxHeight: 420 }}>
-          <h2 style={h2}>News — {symbol}</h2>
+        <section className="panel" style={{ gridArea: "news", maxHeight: 420 }}>
+          <h2 className="panel-title">
+            News <span className="title-meta">{symbol}</span>
+          </h2>
           {panels.news}
         </section>
 
-        <section style={{ ...panel, gridArea: "alerts" }}>
-          <h2 style={h2}>Alerts</h2>
+        <section className="panel" style={{ gridArea: "alerts" }}>
+          <h2 className="panel-title">Alerts</h2>
           {panels.alerts}
         </section>
       </div>
     </main>
   );
 }
-
-const h2: React.CSSProperties = { fontSize: 13, margin: "0 0 10px", color: "var(--accent)" };

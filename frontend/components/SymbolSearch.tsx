@@ -66,53 +66,13 @@ export default function SymbolSearch({ onAdd }: { onAdd: (symbol: string) => voi
         }}
         onFocus={() => hits.length && setOpen(true)}
         placeholder={busy ? "searching…" : "search any market…"}
-        style={{
-          width: "100%",
-          boxSizing: "border-box",
-          background: "#0b0e14",
-          color: "#d6deeb",
-          border: "1px solid #1c2330",
-          borderRadius: 6,
-          padding: "6px 8px",
-          fontSize: 12,
-          fontFamily: "inherit",
-        }}
+        className="input"
+        style={{ width: "100%", padding: "6px 8px" }}
       />
       {open && hits.length > 0 && (
-        <div
-          style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            zIndex: 30,
-            background: "#10141f",
-            border: "1px solid #1c2330",
-            borderRadius: 6,
-            marginTop: 4,
-            maxHeight: 260,
-            overflow: "auto",
-            boxShadow: "0 8px 24px #000a",
-          }}
-        >
+        <div className="dd">
           {hits.map((h) => (
-            <button
-              key={h.symbol}
-              onClick={() => pick(h.symbol)}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                background: "transparent",
-                border: "none",
-                borderBottom: "1px solid #161c2a",
-                color: "#d6deeb",
-                padding: "6px 8px",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: 11,
-              }}
-            >
+            <button key={h.symbol} onClick={() => pick(h.symbol)} className="dd-item">
               <b style={{ color: "#7aa2f7" }}>{h.symbol}</b>{" "}
               <span style={{ color: "#9aa5b1" }}>{h.name}</span>
               <span style={{ float: "right", color: "#5c6773" }}>

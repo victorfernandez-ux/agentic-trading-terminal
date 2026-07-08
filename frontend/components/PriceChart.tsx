@@ -56,7 +56,7 @@ export default function PriceChart({ symbol, liveQuote }: { symbol: string; live
   const up = (liveQuote?.pct_change ?? 0) >= 0;
   return (
     <div>
-      <div style={{ fontSize: 11, color: "#5c6773", marginBottom: 6, display: "flex", gap: 10 }}>
+      <div className="num" style={{ fontSize: 11, color: "#5c6773", marginBottom: 6, display: "flex", gap: 10 }}>
         <span style={{ color: "#d6deeb" }}>{symbol}</span>
         {liveQuote?.price != null && (
           <span style={{ color: "#d6deeb" }}>

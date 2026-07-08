@@ -112,6 +112,17 @@ page.tsx shows a 🔒 token-gate input under the header on 401 and reloads after
 token set anywhere, behavior is identical to before. Also hardened `.error` rendering in
 News/Analytics (the 401 envelope is an object — rendering it crashed React, found in verification).
 Backend tests: 186 (`test_locked_api_accepts_query_token`).
+**v1.12 (July 8, 2026):** reconciled the mobile-app branch with PR #3 (design tokens + responsive
+grid, which landed on main first). The two overlapped on "mobile": PR #3 reflows the desktop grid at
+`@media` breakpoints (1180/760px) with a token system + semantic classes (`.panel`, `.panel-title`,
+`.shell`, `.masthead`, `.terminal-grid`); our branch adds a *bottom-tab app shell* below 768px plus
+PWA/service-worker/auth (which PR #3 lacks). Resolution: adopted PR #3's tokens + classes as the base
+for BOTH layouts (desktop unchanged from PR #3; the old inline `panel`/`h2` consts are gone), and the
+mobile bottom-tab shell (`useIsMobile` → `MobileNav`) now reuses `.panel`/`.panel-title` and its own
+`.m-main`/`.m-view`/`.m-nav` rules (appended to globals.css, safe-area + coarse-pointer 16px inputs).
+Below 768px the tab shell supersedes PR #3's single-column grid-reflow. All my functional deltas
+(apiFetch, chartWidth hook, SSE unmount close, error-object guard, WS env) auto-merged onto PR #3's
+token-migrated components. next build clean; backend tests still 186.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README

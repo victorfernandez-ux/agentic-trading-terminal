@@ -124,7 +124,7 @@ export default function AgentConsole({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <button onClick={run} disabled={running} style={btn(running)}>
+      <button onClick={run} disabled={running} className="btn btn-primary" style={{ cursor: running ? "wait" : undefined }}>
         {running ? "Running agents…" : `▶ Run agents on ${symbol}`}
       </button>
 
@@ -194,23 +194,11 @@ function Spinner() {
         border: "2px solid #1c2330",
         borderTopColor: "#7aa2f7",
         borderRadius: "50%",
-        animation: "attspin 0.8s linear infinite",
+        animation: "att-spin 0.8s linear infinite",
       }}
-    >
-      <style>{`@keyframes attspin { to { transform: rotate(360deg); } }`}</style>
-    </span>
+    />
   );
 }
-
-const btn = (busy: boolean): React.CSSProperties => ({
-  background: busy ? "#141a2a" : "#1f2a44",
-  color: busy ? "#5c6773" : "#7aa2f7",
-  border: "1px solid #1c2330",
-  borderRadius: 6,
-  padding: "8px 12px",
-  cursor: busy ? "wait" : "pointer",
-  fontSize: 13,
-});
 
 const tag = (color: string): React.CSSProperties => ({
   display: "inline-block",
