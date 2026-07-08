@@ -52,15 +52,9 @@ export default function News({ symbol }: { symbol: string }) {
   return (
     <div style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 8 }}>
       {items.map((it, i) => (
-        <a
-          key={i}
-          href={it.link}
-          target="_blank"
-          rel="noreferrer"
-          style={{ color: "#d6deeb", textDecoration: "none", lineHeight: 1.4 }}
-        >
-          <span style={{ color: "#5c6773", marginRight: 6 }}>{ago(it.published_ts)}</span>
-          {it.title}
+        <a key={i} href={it.link} target="_blank" rel="noreferrer" className="news-item">
+          <span className="num" style={{ color: "#5c6773", marginRight: 6 }}>{ago(it.published_ts)}</span>
+          <span className="news-title">{it.title}</span>
         </a>
       ))}
     </div>

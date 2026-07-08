@@ -4,7 +4,6 @@ The point of this suite is parity: same behavior, better plumbing.
 """
 
 import os
-import tempfile
 
 import pytest
 from fastapi.testclient import TestClient

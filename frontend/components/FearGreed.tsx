@@ -150,8 +150,8 @@ export default function FearGreed() {
   );
 
   return (
-    <div style={{ marginTop: 14 }}>
-      <h2 style={{ fontSize: 13, margin: "0 0 8px", color: "#7aa2f7" }}>Fear &amp; Greed Index</h2>
+    <div style={{ marginTop: 16, borderTop: "1px solid #1c2330", paddingTop: 12 }}>
+      <h2 className="panel-title">Fear &amp; Greed</h2>
       <div
         style={{
           display: "flex",

@@ -119,20 +119,7 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
           <button
             key={s}
             onClick={() => onSelect(s)}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-              gap: 6,
-              padding: "6px 8px",
-              borderRadius: 6,
-              border: "1px solid #1c2330",
-              background: s === selected ? "#1a2030" : "transparent",
-              color: s === selected ? "#7aa2f7" : "#d6deeb",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              fontSize: 13,
-            }}
+            className={`wl-row${s === selected ? " active" : ""}`}
           >
             <span>
               {s}
@@ -140,13 +127,13 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
                 <span
                   onClick={(e) => { e.stopPropagation(); onRemove(s); }}
                   title="remove"
-                  style={{ marginLeft: 6, color: "#3a4356", cursor: "pointer", fontSize: 11 }}
+                  className="wl-remove"
                 >
                   ×
                 </span>
               )}
             </span>
-            <span style={{ textAlign: "right", fontSize: 11, lineHeight: 1.3 }}>
+            <span className="num" style={{ textAlign: "right", fontSize: 11, lineHeight: 1.3 }}>
               <span style={{ display: "block", color: "#d6deeb" }}>
                 {q?.price != null ? q.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}
               </span>

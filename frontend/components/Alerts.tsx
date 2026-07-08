@@ -89,12 +89,12 @@ export default function Alerts({ symbol }: { symbol: string }) {
     <div style={{ fontSize: 12 }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
         <b style={{ color: "#7aa2f7" }}>{symbol}</b>
-        <select value={metric} onChange={(e) => setMetric(e.target.value)} style={sel}>
+        <select value={metric} onChange={(e) => setMetric(e.target.value)} className="select">
           {Object.entries(METRIC_LABEL).map(([k, l]) => (
             <option key={k} value={k}>{l}</option>
           ))}
         </select>
-        <select value={op} onChange={(e) => setOp(e.target.value)} style={sel}>
+        <select value={op} onChange={(e) => setOp(e.target.value)} className="select">
           {Object.entries(OP_LABEL).map(([k, l]) => (
             <option key={k} value={k}>{l}</option>
           ))}
@@ -104,9 +104,10 @@ export default function Alerts({ symbol }: { symbol: string }) {
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && create()}
           placeholder="level"
-          style={{ ...sel, width: 90 }}
+          className="input num"
+          style={{ width: 90 }}
         />
-        <select value={trigger} onChange={(e) => setTrigger(e.target.value)} style={sel}>
+        <select value={trigger} onChange={(e) => setTrigger(e.target.value)} className="select">
           <option value="once">once</option>
           <option value="every_time">every time</option>
         </select>
@@ -121,7 +122,7 @@ export default function Alerts({ symbol }: { symbol: string }) {
           />
           🤖 research
         </label>
-        <button onClick={create} style={btn}>+ Alert</button>
+        <button onClick={create} className="btn">+ Alert</button>
         {err && <span style={{ color: "#f7768e" }}>{err}</span>}
       </div>
 
@@ -133,11 +134,14 @@ export default function Alerts({ symbol }: { symbol: string }) {
       {alerts.map((a) => (
         <div
           key={a.id}
+          className="tr-hover"
           style={{
             display: "flex",
             gap: 10,
             alignItems: "center",
-            padding: "4px 0",
+            padding: "4px 6px",
+            margin: "0 -6px",
+            borderRadius: 6,
             color: a.status === "fired" ? "#e0af68" : a.status === "paused" ? dim : "#d6deeb",
           }}
         >
@@ -158,11 +162,11 @@ export default function Alerts({ symbol }: { symbol: string }) {
           </span>
           <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
             {a.status === "active" ? (
-              <button onClick={() => act(a.id, "pause")} style={lnk}>pause</button>
+              <button onClick={() => act(a.id, "pause")} className="btn-link">pause</button>
             ) : (
-              <button onClick={() => act(a.id, "resume")} style={lnk}>re-arm</button>
+              <button onClick={() => act(a.id, "resume")} className="btn-link">re-arm</button>
             )}
-            <button onClick={() => act(a.id, "delete")} style={{ ...lnk, color: "#f7768e" }}>
+            <button onClick={() => act(a.id, "delete")} className="btn-link" style={{ color: "#f7768e" }}>
               delete
             </button>
           </span>
@@ -171,16 +175,3 @@ export default function Alerts({ symbol }: { symbol: string }) {
     </div>
   );
 }
-
-const sel: React.CSSProperties = {
-  background: "#0f1320", color: "#c0caf5", border: "1px solid #1c2330",
-  borderRadius: 6, padding: "3px 6px", fontSize: 12, fontFamily: "inherit",
-};
-const btn: React.CSSProperties = {
-  background: "#1f2a44", color: "#7aa2f7", border: "1px solid #1c2330",
-  borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontSize: 12,
-};
-const lnk: React.CSSProperties = {
-  background: "transparent", border: "none", color: "#7aa2f7",
-  cursor: "pointer", fontSize: 11, padding: 0,
-};
