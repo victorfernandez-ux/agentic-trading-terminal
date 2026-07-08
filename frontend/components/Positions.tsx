@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type Position = {
   symbol: string;
@@ -16,7 +17,7 @@ export default function Positions({ refreshKey }: { refreshKey: number }) {
   const [rows, setRows] = useState<Position[]>([]);
 
   const load = useCallback(() => {
-    fetch("/api/orders/positions/all")
+    apiFetch("/api/orders/positions/all")
       .then((r) => r.json())
       .then((d) => setRows(Array.isArray(d) ? d : []))
       .catch(() => setRows([]));

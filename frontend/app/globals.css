@@ -467,3 +467,94 @@ select {
 .news-item:hover .news-title {
   color: var(--accent);
 }
+
+/* ── Mobile app shell (< 768px) ────────────────────────────────────────
+   A bottom-tab app shell that supersedes the responsive grid below the
+   breakpoint. Reuses .panel for panel chrome; adds tab visibility, a
+   fixed bottom nav, and iOS safe-area handling. Views stay MOUNTED and
+   toggle via display so the quotes WS, agent SSE stream and pollers
+   survive tab switches. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.m-main {
+  padding: calc(8px + var(--safe-top)) 12px calc(64px + var(--safe-bottom));
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.m-masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 2px 2px;
+}
+.m-masthead h1 {
+  font-size: 15px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Only the active tab's view is shown; the rest stay mounted but hidden. */
+.m-view {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+}
+.m-view.active {
+  display: flex;
+}
+
+.m-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: space-around;
+  border-top: 1px solid var(--border);
+  background: rgba(10, 13, 20, 0.96);
+  backdrop-filter: blur(8px);
+  padding-bottom: var(--safe-bottom);
+}
+.m-nav button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0 6px;
+  min-height: 52px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+.m-nav button.active {
+  color: var(--accent);
+}
+.m-nav .icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Bigger tap targets on touch devices; 16px inputs stop iOS focus zoom. */
+@media (pointer: coarse) {
+  .m-nav button {
+    min-height: 52px;
+  }
+  input,
+  select {
+    min-height: 36px;
+    font-size: 16px !important;
+  }
+}

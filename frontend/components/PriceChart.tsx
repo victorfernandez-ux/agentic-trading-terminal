@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { createChart, type IChartApi } from "lightweight-charts";
 import type { Quote } from "@/components/Watchlist";
+import { observeChartWidth } from "@/lib/chartWidth";
 
 type Bar = { t: number | string; o: number; h: number; l: number; c: number; v: number };
 
@@ -14,8 +16,9 @@ export default function PriceChart({ symbol, liveQuote }: { symbol: string; live
   const [status, setStatus] = useState("loading…");
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    const chart = createChart(containerRef.current, {
+    const el = containerRef.current;
+    if (!el) return;
+    const chart = createChart(el, {
       height: 260,
       layout: { background: { color: "transparent" }, textColor: "#7aa2f7" },
       grid: { vertLines: { color: "#1c2330" }, horzLines: { color: "#1c2330" } },
@@ -29,7 +32,7 @@ export default function PriceChart({ symbol, liveQuote }: { symbol: string; live
     });
 
     const enc = encodeURIComponent(symbol);
-    fetch(`/api/market/bars?symbol=${enc}&timeframe=1D&limit=120`)
+    apiFetch(`/api/market/bars?symbol=${enc}&timeframe=1D&limit=120`)
       .then((r) => r.json())
       .then((data) => {
         const bars: Bar[] = data.bars ?? [];
@@ -46,11 +49,8 @@ export default function PriceChart({ symbol, liveQuote }: { symbol: string; live
       })
       .catch(() => setStatus("backend offline"));
 
-    const onResize = () =>
-      chart.applyOptions({ width: containerRef.current?.clientWidth ?? 600 });
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => { window.removeEventListener("resize", onResize); chart.remove(); };
+    const unobserve = observeChartWidth(el, chart);
+    return () => { unobserve(); chart.remove(); };
   }, [symbol]);
 
   const up = (liveQuote?.pct_change ?? 0) >= 0;

@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type Item = { title: string; link: string; source: string; published_ts: number | null };
 
@@ -25,11 +26,13 @@ export default function News({ symbol }: { symbol: string }) {
     let dead = false;
     const load = async () => {
       try {
-        const r = await fetch(`/api/market/news?symbol=${encodeURIComponent(symbol)}&limit=12`);
+        const r = await apiFetch(`/api/market/news?symbol=${encodeURIComponent(symbol)}&limit=12`);
         const j = await r.json();
         if (!dead) {
           setItems(j.items ?? []);
-          setErr(j.error ?? null);
+          // j.error is a string from /market/news, but a {code, message}
+          // envelope on auth/HTTP errors — never render an object as JSX.
+          setErr(typeof j.error === "string" ? j.error : j.error ? "unavailable" : null);
         }
       } catch {
         if (!dead) setErr("news unavailable");

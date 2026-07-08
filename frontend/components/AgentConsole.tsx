@@ -5,7 +5,8 @@
  * LangGraph engine), falling back to the one-shot POST if the stream fails.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { apiFetch, tokenized } from "@/lib/api";
 
 type Result = {
   symbol: string;
@@ -45,6 +46,12 @@ export default function AgentConsole({
   const [err, setErr] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
+  // Close a live SSE stream if the console unmounts mid-run (e.g. the
+  // mobile/desktop layout swaps when the viewport crosses the breakpoint);
+  // otherwise the EventSource keeps the connection open and auto-reconnects
+  // forever, firing setState on a dead component.
+  useEffect(() => () => esRef.current?.close(), []);
+
   function finish(j: Result) {
     setResult(j);
     setRunning(false);
@@ -53,7 +60,7 @@ export default function AgentConsole({
 
   async function runFallback() {
     try {
-      const r = await fetch("/api/agents/propose", {
+      const r = await apiFetch("/api/agents/propose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symbol }),
@@ -74,7 +81,7 @@ export default function AgentConsole({
 
     let es: EventSource;
     try {
-      es = new EventSource(`/api/agents/propose/stream?symbol=${encodeURIComponent(symbol)}`);
+      es = new EventSource(tokenized(`/api/agents/propose/stream?symbol=${encodeURIComponent(symbol)}`));
     } catch {
       void runFallback();
       return;

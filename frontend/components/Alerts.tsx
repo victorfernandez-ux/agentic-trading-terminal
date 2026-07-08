@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type Alert = {
   id: string;
@@ -46,7 +47,7 @@ export default function Alerts({ symbol }: { symbol: string }) {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/alerts");
+      const r = await apiFetch("/api/alerts");
       const j = await r.json();
       setAlerts(j.alerts ?? []);
     } catch {
@@ -67,7 +68,7 @@ export default function Alerts({ symbol }: { symbol: string }) {
       setErr("enter a numeric level");
       return;
     }
-    const r = await fetch("/api/alerts", {
+    const r = await apiFetch("/api/alerts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbol, metric, op, value: v, trigger, auto_research: autoResearch }),
@@ -80,8 +81,8 @@ export default function Alerts({ symbol }: { symbol: string }) {
   }
 
   async function act(id: string, action: "pause" | "resume" | "delete") {
-    if (action === "delete") await fetch(`/api/alerts/${id}`, { method: "DELETE" });
-    else await fetch(`/api/alerts/${id}/${action}`, { method: "POST" });
+    if (action === "delete") await apiFetch(`/api/alerts/${id}`, { method: "DELETE" });
+    else await apiFetch(`/api/alerts/${id}/${action}`, { method: "POST" });
     load();
   }
 

@@ -8,4 +8,5 @@ powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name lik
 timeout /t 2 /nobreak >nul
 set DATABASE_URL=sqlite:///./terminal.db
 start "ATT Backend" /min cmd /c ".\.venv\Scripts\python.exe -X utf8 -m uvicorn app.main:app --port 8000 --log-level info > ..\.private\backend.log 2>&1"
-exit
+rem exit /b (not exit): lets other scripts `call` this one (start-mobile.bat).
+exit /b

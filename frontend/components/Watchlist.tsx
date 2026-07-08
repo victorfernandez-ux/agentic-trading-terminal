@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { apiFetch, tokenized } from "@/lib/api";
 
 export type Quote = {
   symbol: string;
@@ -56,7 +57,7 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
         const results = await Promise.all(
           symbols.map(async (s) => {
             try {
-              const r = await fetch(`/api/market/quote?symbol=${encodeURIComponent(s)}`);
+              const r = await apiFetch(`/api/market/quote?symbol=${encodeURIComponent(s)}`);
               return (await r.json()) as Quote;
             } catch {
               return { symbol: s, price: null, pct_change: null } as Quote;
@@ -72,10 +73,15 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
     const connect = () => {
       if (disposed) return;
       try {
-        // Dev: talk to the backend directly (Next's /api rewrite is HTTP-only).
+        // Talk to the backend directly (Next's /api rewrite is HTTP-only).
+        // NEXT_PUBLIC_WS_BASE overrides for phones/PWA installs that can't
+        // reach the backend on the page host's :8000 (e.g. wss://api.example.com).
         const proto = window.location.protocol === "https:" ? "wss" : "ws";
+        // || (not ??): an empty-string env value must fall through too.
+        const base =
+          process.env.NEXT_PUBLIC_WS_BASE || `${proto}://${window.location.hostname}:8000`;
         const qs = encodeURIComponent(symbols.join(","));
-        ws = new WebSocket(`${proto}://${window.location.hostname}:8000/ws/quotes?symbols=${qs}`);
+        ws = new WebSocket(tokenized(`${base}/ws/quotes?symbols=${qs}`));
         ws.onopen = () => {
           if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
           setMode("live");

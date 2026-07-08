@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 type Order = {
   id: string;
@@ -26,7 +27,7 @@ export default function ApprovalQueue({ refreshKey, onChange }: { refreshKey: nu
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    fetch("/api/orders")
+    apiFetch("/api/orders")
       .then((r) => r.json())
       .then(setOrders)
       .catch(() => setOrders([]));
@@ -39,7 +40,7 @@ export default function ApprovalQueue({ refreshKey, onChange }: { refreshKey: nu
   async function act(id: string, action: "approve" | "reject") {
     setBusy(id);
     try {
-      await fetch(`/api/orders/${id}/${action}`, { method: "POST" });
+      await apiFetch(`/api/orders/${id}/${action}`, { method: "POST" });
       load();
       onChange?.(); // refresh positions after a fill
     } finally {

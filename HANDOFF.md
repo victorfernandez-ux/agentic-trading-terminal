@@ -80,6 +80,49 @@ setState-in-render error — gone, verified in console), `suppressHydrationWarni
 (`GET /orders/positions/all?portfolio_id=`). The duplicate implementations of debate/auth/
 portfolios on that branch were NOT merged (main's tested versions won); one-off .bat helpers stay
 on the rescue branch. Backend tests: 185 (`tests/test_sentiment.py`).
+**v1.10 (July 6, 2026):** mobile app (installable PWA + phone UI; frontend + a one-line ruff F401
+fix in `backend/tests/test_hardening.py` — backend behavior untouched).
+(a) PWA: `app/manifest.ts` (standalone display, generated candlestick icons incl. maskable in
+`public/icons/`), viewport/theme-color/apple-web-app metadata in `layout.tsx`, conservative service
+worker `public/sw.js` (registered in production only; NEVER caches `/api/*` or `/ws/*` — market data
+stays live; cache-first for hashed `_next/static`, network-first shell for offline open). (b) Mobile
+shell at <768px (`lib/useIsMobile.ts` matchMedia): bottom tab bar (`components/MobileNav.tsx`) with
+Markets / Chart / Agent / Orders / Analytics views in `page.tsx`; all views stay MOUNTED and toggle
+via CSS (`app/globals.css`, first stylesheet in the repo — safe-area insets, coarse-pointer tap
+targets) so the quotes WS, agent SSE stream and pollers survive tab switches; picking a watchlist
+symbol jumps to the Chart tab. Desktop grid is unchanged (still inline-styled). (c) Charts moved to
+ResizeObserver (hidden tabs mount at width 0 and get sized when shown, with a fitContent on first
+reveal). (d) Deployment knobs for real phones: `BACKEND_URL` env drives the `/api` rewrite
+(next.config.mjs), `NEXT_PUBLIC_WS_BASE` overrides the quotes-WS host (Watchlist) — defaults keep
+dev behavior (localhost:8000). Gotchas: BOTH env knobs are read at `next build` time (rewrites are
+compiled into routes-manifest.json; NEXT_PUBLIC_* is inlined) — setting them at `next start` does
+nothing, rebuild after changing; body styles moved from layout.tsx inline to globals.css. Post-review
+hardening: SW only caches `res.ok` responses and only saves "/" as the offline shell (no more
+404/502 cache-poisoning), 16px inputs on touch (kills iOS focus auto-zoom), shared
+`lib/chartWidth.ts` for the hidden-tab chart sizing, panels declared once in page.tsx for both
+layouts, AgentConsole closes its SSE stream on unmount, `start-mobile.bat` now `call`s
+start-backend-logged.bat (which ends `exit /b`).
+**v1.11 (July 6, 2026):** frontend auth + lockdown knobs, so a tunneled/hosted mobile instance can
+run with API_TOKEN set. Backend: auth middleware also accepts `?token=` (EventSource can't set
+headers — SSE agent streaming was impossible under auth), `CORS_ORIGINS` env (comma-separated,
+default `http://localhost:3000`). Frontend: `lib/api.ts` (`apiFetch` adds `Authorization: Bearer`
+from localStorage `att.token.v1`, fires an `att:unauthorized` window event on any 401; `tokenized()`
+appends `?token=` for the quotes WS + agent SSE); every component fetch goes through `apiFetch`;
+page.tsx shows a 🔒 token-gate input under the header on 401 and reloads after unlock. With no
+token set anywhere, behavior is identical to before. Also hardened `.error` rendering in
+News/Analytics (the 401 envelope is an object — rendering it crashed React, found in verification).
+Backend tests: 186 (`test_locked_api_accepts_query_token`).
+**v1.12 (July 8, 2026):** reconciled the mobile-app branch with PR #3 (design tokens + responsive
+grid, which landed on main first). The two overlapped on "mobile": PR #3 reflows the desktop grid at
+`@media` breakpoints (1180/760px) with a token system + semantic classes (`.panel`, `.panel-title`,
+`.shell`, `.masthead`, `.terminal-grid`); our branch adds a *bottom-tab app shell* below 768px plus
+PWA/service-worker/auth (which PR #3 lacks). Resolution: adopted PR #3's tokens + classes as the base
+for BOTH layouts (desktop unchanged from PR #3; the old inline `panel`/`h2` consts are gone), and the
+mobile bottom-tab shell (`useIsMobile` → `MobileNav`) now reuses `.panel`/`.panel-title` and its own
+`.m-main`/`.m-view`/`.m-nav` rules (appended to globals.css, safe-area + coarse-pointer 16px inputs).
+Below 768px the tab shell supersedes PR #3's single-column grid-reflow. All my functional deltas
+(apiFetch, chartWidth hook, SSE unmount close, error-object guard, WS env) auto-merged onto PR #3's
+token-migrated components. next build clean; backend tests still 186.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README
