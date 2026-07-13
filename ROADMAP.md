@@ -1,6 +1,8 @@
-# ROADMAP — Vibe-Trading adoption plan (v1)
+# ROADMAP — Vibe-Trading adoption plan (v1.1)
 
 **Date:** July 13, 2026 · **Source research:** [HKUDS/Vibe-Trading](https://github.com/HKUDS/Vibe-Trading)
+README + full [release history](https://github.com/HKUDS/Vibe-Trading/releases) (v0.1.4→v0.1.11) +
+third-party field review (andrew.ooo) — see "Lessons from the field review" at the bottom.
 (MIT — unlike FinceptTerminal we MAY read and adapt its code, keeping the copyright notice; attribute
 adapted implementations in the file header). This roadmap sequences every adoptable element from that
 research into ATT development cycles. It extends — does not replace — `META_PROMPT.md`; Phase A *is*
@@ -38,6 +40,8 @@ Vibe-Trading's `create_hypothesis` / `update_hypothesis` / `link_backtest` tools
 - Agent tools: `create_hypothesis`, `update_hypothesis` (status only — evidence comes from links).
 - Why before A3: gives the scan loop somewhere durable to record *why* a symbol was researched, and
   gives A1's reflections richer raw material.
+- Future extension (their v0.1.9 "Research Goal runtime"): long-running goals with per-goal budgets
+  and auditable checklists — note only, not in scope for this cycle.
 - Tests: lifecycle (open → supported/refuted), link integrity, agent-tool round trip.
 
 **A3. Scan → research loop** *(META item 2)*
@@ -46,6 +50,8 @@ loop's sliding-window hourly cap + audit pattern (`ALERT_AUTO_RESEARCH_PER_HOUR`
 `SCAN_AUTO_RESEARCH_PER_HOUR`). Each scheduled run opens/updates a hypothesis (A2). Proposals only.
 - Touch: `app/analytics/screener.py` (deterministic ranking), `app/alerts/engine.py` or a small
   `app/research/scan_loop.py`, config, audit events `scan.auto_research.*`.
+- Scheduled-run state survives restarts (their v0.1.11 "crash-safe atomic job store"): persist
+  next-run/last-run in a table, not in-memory — the evaluator already restarts with the process.
 - Tests: cap enforcement, ranking determinism, hypothesis linkage, evaluator isolation (a failing
   run never kills the loop).
 
@@ -71,7 +77,8 @@ aggregate metrics; flag strategies that only work in one regime.
 final equity and max-drawdown bands instead of single-point metrics.
 
 **B4. Benchmark panel.** Compare every run against buy-and-hold SPY (equities) / BTC-USD (crypto)
-over the same window — data via the existing keyless Yahoo path.
+over the same window — data via the existing keyless Yahoo path. Report excess return **and
+information ratio** (their v0.1.6 panel shape: ticker / benchmark return / excess / IR).
 
 - All B items: pure functions in `analytics/` (clean-room OK to consult MIT source), exposed through
   the existing `/analytics/backtest` endpoint (new optional flags), rendered in the Analytics panel
@@ -88,7 +95,9 @@ per-market chain (Vibe-Trading pattern: least-ban-risk first, key-gated last, **
 fallback** — every fallback hop is logged/audited).
 - Add **Stooq** as the second keyless equities source (CSV over HTTPS, no auth) — the concrete
   answer to "Yahoo throttles / dev network blocks exchanges".
-- Tests: chain order, hop logging, Stooq parser on fixtures, symbol normalization.
+- Cache staleness rule (their v0.1.10): **never cache a bar range that ends today** — today's bar
+  is still forming. Apply to the screener's 15-min bar cache and any new loader cache.
+- Tests: chain order, hop logging, Stooq parser on fixtures, symbol normalization, staleness rule.
 
 **C2. Alpha factor pack for the screener.** Cherry-pick 10–20 classic factors: `alpha101`
 (Kakushadze, arXiv:1601.00991 — public formulas), a few `qlib158` (Apache-2), and academic ones
@@ -96,6 +105,10 @@ fallback** — every fallback hop is logged/audited).
 - New: `app/analytics/factors.py` (pure pandas/NumPy, PIT-safe: only data ≤ bar date), screener
   gains factor-rank conditions; scan loop (A3) can rank by factor score.
 - Tests: factor values on hand-computed fixtures, no look-ahead (shift assertions).
+
+**C3. Watchlist correlation heatmap.** Rolling return correlations across the watchlist symbols
+(their v0.1.7 dashboard) — one pure function in `analytics/` + a small heatmap in the Analytics
+panel. Cheap, and gives the risk agent a concentration signal (`get_correlations` tool).
 
 ---
 
@@ -157,6 +170,58 @@ named volume for the SQLite file — aligns `docker-compose.yml` with the hosted
 
 ---
 
+## Phase G — LLM observability & robustness
+
+Motivated by the field review's two sharpest caveats (cost opacity, provider flakiness).
+
+**G1. Per-run LLM usage + cost accounting.** Record provider/model/prompt+completion tokens for
+every LLM call in an agent run (their `llm_usage.json` pattern), aggregated per `run_propose` and
+written to the audit trail. Go one better than Vibe-Trading (review caveat: "provider-reported
+only, no price estimation — you multiply yourself"): keep a small static price table for the
+models we actually use and show **estimated cost per proposal** in AgentConsole + SSE payload.
+Makes ALERT/SCAN_AUTO_RESEARCH_PER_HOUR caps tunable on real numbers instead of vibes.
+- Touch: `app/agents/llm.py` (usage capture on every `complete_json`), `graph.py` (aggregate),
+  audit event `agent.llm_usage`; frontend AgentConsole cost line.
+- Tests: scripted LLM responses with usage blocks → expected aggregation + cost math.
+
+**G2. LLM call robustness.** Pre-flight response validation + bounded retry on empty/malformed
+model output (their `empty_model_response` handling and stream-failure retry). ATT is mostly
+shielded by OpenRouter's single API shape, but `complete_json` currently trusts the model: add
+one retry on empty/unparseable JSON with the error appended to the prompt, then fail loudly into
+the existing error envelope. Judge "invalid direction coerces to none" stays as the last resort.
+- Tests: empty response → one retry → typed failure; malformed JSON → repair retry path.
+
+---
+
+## Considered & deferred (from the same research — not adopted now)
+
+- **Vision tool for chart/screenshot reads** (v0.1.11): interesting for chart-pattern evidence,
+  but needs a multimodal model + new cost profile. Revisit after G1 gives cost visibility.
+- **Pine Script / MetaTrader / vnpy strategy exports** (v0.1.4+): ATT keeps strategy logic in
+  code, not user-exportable templates. Revisit if backtest strategies become user-authored.
+- **Universal document reader (`read_document`) / `read_url` via Jina**: general-agent tooling;
+  ATT's evidence pipeline is deliberately narrow (quotes/bars/news/chains). Skip.
+- **Swarm presets / 29-team orchestration**: ATT's fixed research→debate→risk→portfolio graph is
+  the product thesis; persona consensus already covers the "committee" angle.
+- **Portfolio optimizers (turnover-aware L1, etc.)**: sizing stays deterministic in
+  `_build_order` — an optimizer would move sizing authority. Guardrail, not a gap.
+- **Multi-market engines (China A/futures/forex/India)**, **QVeris premium data**, **16-adapter
+  IM breadth**, **OAuth broker mandates**: out of market scope or guardrail-conflicting (E2/F3
+  adopt the safe kernels: one IM adapter, structural paper discriminators).
+
+## Lessons from the field review (andrew.ooo)
+
+Caveats the reviewer hit in practice, and what ATT does about them:
+- **Cost transparency incomplete** → G1 ships usage *and* price estimation from day one.
+- **Provider quirks bite** (DeepSeek hangs, Kimi UA, Gemini signatures) → ATT stays single-gateway
+  (OpenRouter) and adds G2's bounded retries; we do not adopt a 13-provider capability layer.
+- **Only one live broker verified end-to-end** → reinforces ATT's paper-only stance: breadth of
+  broker connectors is marketing surface; correctness of one gated path is the product.
+- **Naming/discoverability** → not our problem to fix, but a reminder: ATT's public README should
+  say precisely what it is ("paper-trading research terminal, human-approved proposals").
+
+---
+
 ## Sequencing & rules
 
 | Order | Item | Depends on | Size |
@@ -168,9 +233,12 @@ named volume for the SQLite file — aligns `docker-compose.yml` with the hosted
 | 5 | B1→B4 backtest credibility | — | M–L |
 | 6 | C1 fallback chain + Stooq | — | S–M |
 | 7 | C2 alpha factors | C1 helpful, not required | M |
-| 8 | D1 approver profile | A1 (shared P&L calc) | M |
-| 9 | E1 MCP server | stable tool registry | M |
-| 10 | E2 Telegram alerts | alerts engine (done) | S |
+| 8 | C3 correlation heatmap | — | S |
+| 9 | G1 LLM usage + cost | — (pull forward anytime; informs cap tuning) | S |
+| 10 | G2 LLM robustness | — | S |
+| 11 | D1 approver profile | A1 (shared P&L calc) | M |
+| 12 | E1 MCP server | stable tool registry | M |
+| 13 | E2 Telegram alerts | alerts engine (done) | S |
 | F | hardening | continuous; F1/F2 before hosted deploy | S each |
 
 - Working rules unchanged from `META_PROMPT.md`: tests green → commit → next; restart backend after
