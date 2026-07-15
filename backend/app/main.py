@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
 from app.api import (agents, alerts, analytics, audit, health, market,
-                     memory, orders, portfolios, stream)
+                     memory, orders, portfolios, research, stream)
 from app.config import settings
 from app.core import db
 from app.core.db import init_db
@@ -131,6 +131,7 @@ app.include_router(portfolios.router)
 app.include_router(alerts.router)
 app.include_router(audit.router)
 app.include_router(memory.router)
+app.include_router(research.router)
 app.include_router(stream.router)
 
 

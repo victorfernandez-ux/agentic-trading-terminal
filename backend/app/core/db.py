@@ -73,6 +73,21 @@ class ReflectionRow(Base):
     data = Column(JSON)  # full reflection record incl. text + P&L
 
 
+class HypothesisRow(Base):
+    """Hypothesis registry (roadmap A2): a research idea as a first-class
+    object linking agent runs and orders to an eventual outcome, so the
+    scan loop and reflections have durable context for *why* a symbol was
+    researched."""
+
+    __tablename__ = "hypotheses"
+    seq = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String, unique=True, index=True)
+    ts = Column(String, index=True)
+    symbol = Column(String, index=True)
+    status = Column(String, index=True)  # open | supported | refuted | expired
+    data = Column(JSON)  # statement, source, linked runs/orders, notes
+
+
 class AuditRow(Base):
     """Append-only audit trail (MVP req #5: log and replay every decision).
 

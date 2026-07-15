@@ -368,20 +368,35 @@ async def run_research(symbol: str, question: str) -> dict:
         "rationale": [r for r in result.get("rationale", []) if r],
     }
 
-async def run_propose(symbol: str, question: str, source: str = "agent") -> dict:
+async def run_propose(symbol: str, question: str, source: str = "agent",
+                      hypothesis_id: str | None = None) -> dict:
     """run_research + queue any order draft as PENDING_APPROVAL.
 
-    Single entry point for every proposer (REST endpoint, alert auto-research).
-    Proposals only -- the human approval gate in app/api/orders.py decides
-    whether anything ever reaches the (paper) broker.
+    Single entry point for every proposer (REST endpoint, alert
+    auto-research, scan loop). Proposals only -- the human approval gate in
+    app/api/orders.py decides whether anything ever reaches the (paper)
+    broker. An optional hypothesis_id ties the run and any resulting order
+    to a hypothesis-registry entry (roadmap A2) so the idea's outcome stays
+    traceable; linking is guarded and never blocks the proposal.
     """
     result = await run_research(symbol=symbol, question=question)
     record = None
     draft = result.get("order")
     if draft:
+        if hypothesis_id:
+            draft = {**draft, "hypothesis_id": hypothesis_id}
         record = orders_store.create_pending({**draft, "source": source})
     result["order_id"] = record["id"] if record else None
     result["order_status"] = record["status"] if record else None
+    if hypothesis_id:
+        try:
+            from app.research import hypotheses
+            hypotheses.link_run(hypothesis_id, result["run_id"])
+            if record:
+                hypotheses.link_order(hypothesis_id, record["id"])
+            result["hypothesis_id"] = hypothesis_id
+        except Exception:  # noqa: BLE001 -- linking never blocks a proposal
+            pass
     return result
 
 
