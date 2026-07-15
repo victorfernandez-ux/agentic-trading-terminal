@@ -6,29 +6,23 @@ You are working on the **Agentic Trading Terminal** in this folder. Read `CLAUDE
 (current state, gotchas) and `PROJECT_PLAN.md` (vision) first, then execute the development plan below
 **in order**. When you finish a cycle, update `HANDOFF.md` and rewrite this file for the next one.
 
-## Context (July 2, 2026 — v1.9)
+## Context (July 14, 2026 — v1.13)
 
-Everything through v1.4 (SSE streaming, backtest UI, options analytics, discovery layer: batched
-quotes, symbol search + dynamic watchlist, news evidence, 9-screen screener) plus v1.5 (alerts
-engine with WS push + Alerts panel; deterministic sizing bands in _build_order) and v1.6: the
-agent graph is now **research → debate → risk → portfolio** — research is a parallel evidence
-fan-out (asyncio.gather: quote/bars required, technical/risk-metrics/personas/news guarded, zero
-LLM tokens), then a 1-round bull → bear → judge debate commits the direction (anti-hold; debaters
-optionally on a cheaper LLM_MODEL_DEBATE; `debate` key in the payload; AgentConsole shows both
-cases). v1.7 added the alert→research loop: per-alert `auto_research` flag; on fire the evaluator
-schedules `graph.run_propose` (shared with POST /agents/propose) with a templated question,
-rate-capped by ALERT_AUTO_RESEARCH_PER_HOUR (default 4/h, sliding window), audited, proposals
-only. v1.8 hardened the plumbing behavior-neutrally: per-request DB sessions (middleware +
-`db.session_scope()` ContextVar reuse), consistent `{"detail", "error": {code, message}}` HTTP
-error envelopes (legacy `detail` preserved; unhandled -> generic 500, nothing leaked), and
-Alembic (`backend/migrations/`, revisions == create_all, proven by test). v1.9 added single-user
-token auth (API_TOKEN, off by default; Bearer header, WS ?token=, /health exempt) and the
-Portfolio entity (`orders.portfolio_id`, seeded `default` preserves behavior, /portfolios CRUD,
-migration 0002 + init_db heal for legacy dev DBs). Backend tests: **167 passing**. Read
-RESEARCH.md — verified data-source matrix + ranked agentic patterns.
+Everything through v1.12 (see HANDOFF.md: SSE streaming, options analytics, discovery layer, alerts
+engine + alert→research loop, research→debate→risk→portfolio graph, hardening, auth + portfolios,
+sentiment, PWA/mobile shell + frontend auth, design tokens) plus **v1.13 = ROADMAP.md Phase A**:
+(A1) reflection memory — closed round trips become stored lessons (`app/memory/reflections.py`,
+migration 0003) injected into debate evidence (REFLECTIONS_LIMIT); (A2) hypothesis registry —
+idea→runs→orders→outcome as one traceable object (`app/research/hypotheses.py`, migration 0004,
+`/research/hypotheses`, `run_propose(hypothesis_id=)`); (A3) scan→research loop —
+`POST /research/scan/run` or opt-in schedule, audit-counted crash-safe cap
+(SCAN_AUTO_RESEARCH_PER_HOUR); (A4) portfolio switcher in the frontend. Backend tests: **209**.
+`ROADMAP.md` sequences the remaining Vibe-Trading-derived phases (B–G) — it is the plan of record;
+Vibe-Trading (HKUDS) is MIT: adapting its code is allowed WITH attribution; FinceptTerminal stays
+clean-room (AGPL).
 
 Stack: FastAPI + LangGraph (`backend/app/`), Next.js + Lightweight Charts (`frontend/`), SQLite default,
-Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired* (AGPL) — clean-room only.
+Yahoo-primary data, LLM via OpenRouter.
 
 ## Non-negotiable guardrails — never weaken these
 
@@ -39,39 +33,38 @@ Yahoo-primary data, LLM via OpenRouter. Analytics are FinceptTerminal-*inspired*
 
 ## Development plan (do in order; each item: tests green → commit → next)
 
-The v1.6 plan is complete (debate, alert→research, hardening, auth/portfolios — docs synced per
-item). Next cycle, from RESEARCH.md's remaining ranked patterns:
+Phase A is complete. Next cycle = **ROADMAP.md Phase B (backtest credibility)**, then quick wins:
 
-1. **Reflection memory from the audit log.** After a position closes, compute realized P&L from
-   the audit trail and store a short reflection; inject the last N reflections for the symbol
-   into the debate/judge prompts (SQL-recency first; BM25 only if needed). Tests with a crafted
-   audit history.
+1. **B1 — Run cards.** Every backtest run writes `run_card.json` (+ Markdown): params, data window,
+   metrics, engine version, artifact paths. Store under `.private/runs/` (gitignored) with a
+   `GET /analytics/backtest/runs` index. Deterministic + reproducible.
 
-2. **Scan → research loop.** Screener top hit (ranked in code) can feed run_propose on a
-   schedule or on demand — reuse the alert loop's hourly cap + audit pattern; proposals only.
+2. **B2 — Walk-forward validation.** Rolling train/test windows over the existing engine; per-window
+   and aggregate metrics; flag one-regime strategies. Pure functions in `analytics/`, exposed as
+   optional flags on the existing `/analytics/backtest` endpoint.
 
-3. **Frontend: portfolio switcher.** Dropdown over /portfolios; Approval Queue + Positions
-   filter by the selected portfolio (default preserves today's view).
+3. **B3 — Monte Carlo + bootstrap confidence intervals.** Resample trade sequences; report
+   P5/P50/P95 final equity and max-drawdown bands alongside the point metrics.
 
-4. **Public-repo security pass (repo is PUBLIC for public testing — manage along the way).**
-   Done at publication (July 2, 2026): tracked-file secret scan clean; `.env`/`.private/`
-   gitignored; GitHub secret scanning + push protection + Dependabot alerts enabled. Accepted
-   low-risk: `.claude/launch.json` (local path/username, no secrets) exists in history at
-   `a0799ad`. Before promoting the public test: add a LICENSE (none = all rights reserved;
-   analytics stay FinceptTerminal-*inspired* clean-room — AGPL forbids copying code) and a
-   README disclaimer (paper-trading research tool; not financial advice; live trading
-   hard-disabled). Before any hosted deployment: set `API_TOKEN`, lock CORS to the real origin,
-   move off SQLite. As it evolves: triage Dependabot alerts, add branch protection on main once
-   PRs/collaborators appear, re-run a secret scan before each public milestone.
+4. **B4 — Benchmark panel.** Buy-and-hold SPY (equities) / BTC-USD (crypto) over the same window:
+   benchmark return, excess return, information ratio. Yahoo keyless path.
 
-5. **Docs sync.** Update README/HANDOFF/RESEARCH, rewrite this meta prompt.
+5. **Frontend Analytics panel:** equity-curve chart gains CI bands + benchmark overlay; run list
+   from B1. Research agent's `run_backtest` tool returns the validated metrics so debate evidence
+   can cite "walk-forward holds/breaks".
+
+6. **Docs sync.** Update README/HANDOFF/ROADMAP (tick Phase B), rewrite this meta prompt for
+   Phase C/G (data breadth + LLM cost observability — see ROADMAP.md).
 
 ## Working rules
 
-- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (139+ green).
+- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (209+ green).
+  (Linux/CI: `backend/.venv/bin/python -m pytest -q`.)
 - **Restart the backend after backend changes** — use repo-root `start-backend-logged.bat`
   (kills :8000 zombies incl. orphaned `--multiprocessing-fork` reload workers, logs to
   `.private\backend.log`). Hot-reload misfires on this synced folder.
 - Market/analytics endpoints take `symbol` as a **query param** (crypto "/" breaks paths).
 - Yahoo v7/v10 need cookie+crumb (`app/data/options_chain.py`); v8 chart stays keyless.
-- Small commits (`feat:`/`fix:`/`chore:`). No new deps unless an item needs them (Alembic pre-approved).
+- JSON rows in SQLAlchemy: deep-copy before mutating nested lists (see HANDOFF v1.13 gotcha).
+- Small commits (`feat:`/`fix:`/`chore:`). No new deps unless an item needs them.
+- No recurring/hourly PR-babysitting wakeups (owner preference, see CLAUDE.md).

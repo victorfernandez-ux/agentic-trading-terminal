@@ -123,6 +123,30 @@ mobile bottom-tab shell (`useIsMobile` → `MobileNav`) now reuses `.panel`/`.pa
 Below 768px the tab shell supersedes PR #3's single-column grid-reflow. All my functional deltas
 (apiFetch, chartWidth hook, SSE unmount close, error-object guard, WS env) auto-merged onto PR #3's
 token-migrated components. next build clean; backend tests still 186.
+**v1.13 (July 14, 2026):** ROADMAP.md Phase A (Vibe-Trading adoption plan — see ROADMAP.md; HKUDS/
+Vibe-Trading is MIT, adaptation allowed with attribution, distinct from the FinceptTerminal clean-room
+rule). (A1) **Reflection memory**: when an approved paper fill flattens a position,
+`app/memory/reflections.py` replays the symbol's fills into round trips (weighted-average accounting,
+flips close+reopen), computes realized P&L, and stores a deterministic lesson (`reflections` table,
+migration 0003, unique close_order_id = idempotent hook in orders_store.approve; approve also stamps
+`fill_ts`). research_node injects the last N per symbol (REFLECTIONS_LIMIT, default 5) into the debate
+evidence; `agent.debate` audit payload now carries `thesis` so reflections can quote the entry thesis.
+Read-only `GET /memory/reflections`. Audit: `memory.reflection.created`. (A2) **Hypothesis registry**:
+`app/research/hypotheses.py` + `hypotheses` table (migration 0004) — statement/status
+(open|supported|refuted|expired)/linked runs+orders/outcome (realized P&L read off reflections of
+linked orders). `/research/hypotheses` CRUD; `run_propose(hypothesis_id=)` links the run and stamps
+the order (guarded); agent tools `create_hypothesis`/`update_hypothesis`. Gotcha fixed: JSON rows
+must be deep-copied before mutating — shallow `dict(row.data)` aliases nested lists so appends make
+old==new at flush and SQLAlchemy skips the UPDATE. (A3) **Scan→research loop**:
+`app/research/scan_loop.py` — screener top hit → reuse-or-create the symbol's open `scan_auto`
+hypothesis → `run_propose`. On demand (`POST /research/scan/run`) or opt-in schedule
+(SCAN_AUTO_RESEARCH_ENABLED + SCAN_INTERVAL_MINUTES, default off). Cap SCAN_AUTO_RESEARCH_PER_HOUR
+(default 2) counted from the audit trail (crash-safe across restarts); audit
+`scan.auto_research.start/done/skipped/error`. Proposals only. (A4) **Portfolio switcher**:
+PortfolioSwitcher dropdown in the Approval Queue title (both layouts) filters queue+positions via
+`?portfolio_id=`; "default" keeps the unfiltered view; hidden until a second portfolio exists.
+Also: postcss forced to >=8.5.10 via npm override (Dependabot GHSA-qx2v-qp2m-jg93, moderate).
+Backend tests: **209**.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README
