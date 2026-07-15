@@ -177,7 +177,8 @@ def _ensure_schema_upgrades(eng) -> None:
     from sqlalchemy import inspect
 
     insp = inspect(eng)
-    if "orders" in insp.get_table_names():
+    tables = insp.get_table_names()
+    if "orders" in tables:
         cols = {c["name"] for c in insp.get_columns("orders")}
         if "portfolio_id" not in cols:
             log.info("upgrading dev schema: orders.portfolio_id")
@@ -185,6 +186,26 @@ def _ensure_schema_upgrades(eng) -> None:
                 c.execute(text("ALTER TABLE orders ADD COLUMN portfolio_id VARCHAR"))
                 c.execute(text("CREATE INDEX IF NOT EXISTS "
                                "ix_orders_portfolio_id ON orders (portfolio_id)"))
+
+    # Dev DBs created before PortfolioRow gained the `seq` PK lack the column,
+    # and SQLite can't ALTER TABLE ADD a primary key — rebuild the table.
+    # (Alembic DBs are unaffected: migration 0002 always created `seq`.)
+    if "portfolios" in tables and eng.dialect.name == "sqlite":
+        cols = {c["name"] for c in insp.get_columns("portfolios")}
+        if "seq" not in cols:
+            log.info("upgrading dev schema: rebuilding portfolios with seq PK")
+            with eng.begin() as c:
+                c.execute(text(
+                    "CREATE TABLE portfolios_new ("
+                    "seq INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "id VARCHAR, name VARCHAR, data JSON)"))
+                c.execute(text(
+                    "INSERT INTO portfolios_new (id, name, data) "
+                    "SELECT id, name, data FROM portfolios ORDER BY rowid"))
+                c.execute(text("DROP TABLE portfolios"))
+                c.execute(text("ALTER TABLE portfolios_new RENAME TO portfolios"))
+                c.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS "
+                               "ix_portfolios_id ON portfolios (id)"))
 
 
 def init_db() -> None:
