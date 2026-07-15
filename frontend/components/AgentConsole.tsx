@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { apiFetch, tokenized } from "@/lib/api";
+import { apiFetch, ticketed } from "@/lib/api";
 
 type Result = {
   symbol: string;
@@ -78,7 +78,7 @@ export default function AgentConsole({
     }
   }
 
-  function run() {
+  async function run() {
     setRunning(true);
     setErr(null);
     setResult(null);
@@ -87,7 +87,10 @@ export default function AgentConsole({
 
     let es: EventSource;
     try {
-      es = new EventSource(tokenized(`/api/agents/propose/stream?symbol=${encodeURIComponent(symbol)}`));
+      // Single-use ticket keeps the API token out of the SSE URL (F1);
+      // ticketed() falls back to ?token= if minting fails.
+      const url = await ticketed(`/api/agents/propose/stream?symbol=${encodeURIComponent(symbol)}`);
+      es = new EventSource(url);
     } catch {
       void runFallback();
       return;

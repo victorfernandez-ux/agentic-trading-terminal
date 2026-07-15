@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { apiFetch, tokenized } from "@/lib/api";
+import { apiFetch, ticketed } from "@/lib/api";
 
 export type Quote = {
   symbol: string;
@@ -70,7 +70,7 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
       pollTimer = setInterval(poll, 10_000);
     };
 
-    const connect = () => {
+    const connect = async () => {
       if (disposed) return;
       try {
         // Talk to the backend directly (Next's /api rewrite is HTTP-only).
@@ -81,7 +81,10 @@ export default function Watchlist({ symbols, selected, onSelect, onQuotes, onRem
         const base =
           process.env.NEXT_PUBLIC_WS_BASE || `${proto}://${window.location.hostname}:8000`;
         const qs = encodeURIComponent(symbols.join(","));
-        ws = new WebSocket(tokenized(`${base}/ws/quotes?symbols=${qs}`));
+        // Single-use ticket keeps the API token out of the WS URL (F1).
+        const url = await ticketed(`${base}/ws/quotes?symbols=${qs}`);
+        if (disposed) return;
+        ws = new WebSocket(url);
         ws.onopen = () => {
           if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
           setMode("live");

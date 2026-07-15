@@ -1,15 +1,45 @@
+# Hardened compose (roadmap F4). Dev infra (db/redis) + the backend app.
+# Hosted-deploy checklist still applies before exposing anything publicly:
+# set API_TOKEN, lock CORS_ORIGINS to the real origin, override POSTGRES_
+# PASSWORD, and pin images by digest (tags here are versioned, not :latest,
+# but digests are the real pin).
+
 services:
+  backend:
+    build: ./backend
+    container_name: att_backend
+    read_only: true                    # rootfs immutable; state lives on /data
+    tmpfs:
+      - /tmp
+    volumes:
+      - att_appdata:/data              # SQLite, run cards, kill switch
+    ports:
+      - "127.0.0.1:8000:8000"          # localhost only — front it with a proxy
+    environment:
+      # Uncomment to use Postgres instead of the SQLite file on /data:
+      # DATABASE_URL: postgresql+psycopg://trader:trader@db:5432/terminal
+      LOG_LEVEL: INFO
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      db:
+        condition: service_healthy
+
   db:
-    image: timescale/timescaledb:latest-pg16
+    image: timescale/timescaledb:2.17.2-pg16
     container_name: att_db
     environment:
       POSTGRES_USER: trader
-      POSTGRES_PASSWORD: trader
+      POSTGRES_PASSWORD: trader        # dev default — override for any real deploy
       POSTGRES_DB: terminal
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"          # never expose the DB publicly
     volumes:
       - att_pgdata:/var/lib/postgresql/data
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U trader -d terminal"]
       interval: 5s
@@ -17,12 +47,14 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     container_name: att_redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - att_redisdata:/data
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -30,5 +62,6 @@ services:
       retries: 5
 
 volumes:
+  att_appdata:
   att_pgdata:
   att_redisdata:

@@ -200,6 +200,23 @@ test_mcp_server.py. (E2) **Telegram notifications**: `app/notify/` thin adapter 
 off unless TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID are set; fired alerts + new PENDING_APPROVAL
 proposals push a message linking back to PUBLIC_BASE_URL — no inline buttons, approval never leaves
 the app. Backend tests: **278**.
+**v1.17 (July 15, 2026):** ROADMAP.md Phase F + G2 — **the Vibe-Trading adoption roadmap is
+COMPLETE** (A–G all landed). (F1) **one-time auth tickets**: `app/core/tickets.py` (60s TTL,
+single-use, in-memory, prune-on-mint), `POST /auth/ticket` (itself token-gated); the HTTP auth
+middleware and quotes-WS accept `?ticket=` redeemed destructively so a leaked URL is worthless;
+frontend `ticketed()` in lib/api.ts (AgentConsole SSE + Watchlist WS migrated, `?token=` fallback
+kept). (F2) **CSRF guard**: outermost middleware 403s browser-sent unsafe methods whose Origin is
+neither an allowed CORS origin nor this host; OPTIONS/no-Origin pass. (F3) **kill switch +
+structural paper check**: touch KILL_SWITCH_FILE (default `.private/KILL_SWITCH`) → every submission
+raises TradingHalted, claim released (order back to PENDING_APPROVAL), audited `trading.halted`;
+`get_broker()` asserts the adapter's structural `is_paper` and fails closed; live still hard-raises.
+(F4) **Docker hardening**: `backend/Dockerfile` (multi-stage, non-root, mutable state on /data so
+rootfs can be read-only) + compose backend service (read_only, tmpfs /tmp, cap_drop ALL,
+no-new-privileges, localhost-only ports incl. db/redis, versioned tags — pin digests at deploy;
+NOT built in-session, run `docker compose build` before deploying). (G2) **LLM retry**:
+complete_json retries once on empty/unparseable output with the failure described in the prompt,
+then raises typed LLMResponseError (the silent `{"raw": ...}` path is gone); retries count toward
+G1 usage. Backend tests: **299**.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README

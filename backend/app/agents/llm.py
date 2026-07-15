@@ -21,6 +21,12 @@ class LLMNotConfigured(RuntimeError):
     """Raised when no API key is available for the selected provider."""
 
 
+class LLMResponseError(RuntimeError):
+    """Model returned empty/unparseable output even after the retry (G2).
+    Callers surface this through the standard error envelope instead of
+    silently proceeding on garbage."""
+
+
 # ── Per-run usage tracking (roadmap G1) ─────────────────────────────────
 # A ContextVar collector: the run wrapper opens track_usage(), every
 # complete_json inside that context appends its token usage, and the run
@@ -128,6 +134,22 @@ def is_configured() -> bool:
         return False
 
 
+def _parse_json_object(content: str) -> dict | None:
+    """Parse a JSON object, tolerating prose/fence wrapping. None = failed."""
+    try:
+        out = json.loads(content)
+        return out if isinstance(out, dict) else None
+    except json.JSONDecodeError:
+        start, end = content.find("{"), content.rfind("}")
+        if start != -1 and end != -1:
+            try:
+                out = json.loads(content[start:end + 1])
+                return out if isinstance(out, dict) else None
+            except json.JSONDecodeError:
+                return None
+        return None
+
+
 async def complete_json(system: str, user: str, *, temperature: float = 0.2,
                         model: str | None = None) -> dict:
     """Call the model and parse a JSON object from the response.
@@ -135,32 +157,47 @@ async def complete_json(system: str, user: str, *, temperature: float = 0.2,
     We instruct the model to return JSON and request response_format json
     when supported; we still defensively parse in case a model ignores it.
     `model` overrides settings.llm_model per call (e.g. cheap debaters).
+
+    Robustness (roadmap G2): an empty or unparseable reply gets exactly
+    ONE retry with the failure described in the prompt; a second failure
+    raises LLMResponseError — loud beats garbage.
     """
     client = get_client()
     used_model = model or settings.llm_model
-    resp = await client.chat.completions.create(
-        model=used_model,
-        temperature=temperature,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        response_format={"type": "json_object"},
-    )
-    # Usage capture (G1): provider-reported tokens into the ambient
-    # collector, if a run is tracking. Never breaks the call.
-    entries = _usage_collector.get()
-    usage = getattr(resp, "usage", None)
-    if entries is not None and usage is not None:
-        entries.append({"model": used_model,
-                        "prompt_tokens": getattr(usage, "prompt_tokens", 0) or 0,
-                        "completion_tokens": getattr(usage, "completion_tokens", 0) or 0})
-    content = resp.choices[0].message.content or "{}"
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        # Some models wrap JSON in prose or fences; extract the first object.
-        start, end = content.find("{"), content.rfind("}")
-        if start != -1 and end != -1:
-            return json.loads(content[start : end + 1])
-        return {"raw": content}
+    user_payload = user
+    failure = ""
+    for attempt in range(2):
+        resp = await client.chat.completions.create(
+            model=used_model,
+            temperature=temperature,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_payload},
+            ],
+            response_format={"type": "json_object"},
+        )
+        # Usage capture (G1): provider-reported tokens into the ambient
+        # collector, if a run is tracking. Retries are paid calls — count
+        # every attempt. Never breaks the call.
+        entries = _usage_collector.get()
+        usage = getattr(resp, "usage", None)
+        if entries is not None and usage is not None:
+            entries.append({"model": used_model,
+                            "prompt_tokens": getattr(usage, "prompt_tokens", 0) or 0,
+                            "completion_tokens": getattr(usage, "completion_tokens", 0) or 0})
+        content = (resp.choices[0].message.content or "").strip()
+        if content:
+            parsed = _parse_json_object(content)
+            if parsed is not None:
+                return parsed
+            failure = "your reply was not a parseable JSON object"
+        else:
+            failure = "your reply was empty"
+        if attempt == 0:
+            user_payload = (
+                user + "\n\nIMPORTANT: your previous reply failed ({f}). "
+                "Respond again with ONLY a single valid JSON object — no "
+                "prose, no code fences.".format(f=failure)
+            )
+    raise LLMResponseError(
+        "model {m} failed twice: {f}".format(m=used_model, f=failure))
