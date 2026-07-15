@@ -73,7 +73,9 @@ export default function Analytics({
         res = await apiFetch(`/api/analytics/backtest`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ symbol, strategy, limit: 365 }),
+          // Credibility layer on: walk-forward + bootstrap bands, auto
+          // benchmark, and a saved run card per run.
+          body: JSON.stringify({ symbol, strategy, limit: 365, validate_run: true, save_card: true }),
         });
       } else if (tab === "DCF") {
         res = await apiFetch(`/api/analytics/dcf`, {
@@ -316,10 +318,11 @@ export default function Analytics({
               ["Fees", <span key="4">{d.fee_bps} bps/side</span>],
             ]}
           />
+          <Validation validation={d.validation} benchmark={d.benchmark} runCard={d.run_card} />
           <TradeList trades={d.trades} />
           {Array.isArray(d.equity_curve) && d.equity_curve.length > 1 && (
             <div style={{ flexBasis: "100%" }}>
-              <EquityChart points={d.equity_curve} />
+              <EquityChart points={d.equity_curve} benchmark={d.benchmark?.curve} />
             </div>
           )}
         </div>
@@ -430,7 +433,54 @@ export default function Analytics({
   );
 }
 
-function EquityChart({ points }: { points: { t: number; equity: number }[] }) {
+// Walk-forward verdict + bootstrap bands + benchmark excess (roadmap B).
+function Validation({
+  validation,
+  benchmark,
+  runCard,
+}: {
+  validation?: Record<string, any>;
+  benchmark?: Record<string, any>;
+  runCard?: { id: string };
+}) {
+  const wf = validation?.walk_forward;
+  const mc = validation?.monte_carlo;
+  if (!wf && !mc && !benchmark) return null;
+  const verdict = wf?.error
+    ? "—"
+    : wf?.holds
+      ? "HOLDS"
+      : wf?.one_regime
+        ? "ONE-REGIME"
+        : "weak";
+  const verdictColor = wf?.holds ? green : wf?.one_regime ? red : dim;
+  const r = mc?.return_pct;
+  return (
+    <KV
+      rows={[
+        ["Walk-forward", <span key="1">
+          <b style={{ color: verdictColor }}>{verdict}</b>
+          {wf && !wf.error ? <span style={{ color: dim }}> · {wf.positive_windows}/{wf.n_windows} windows +, worst <Num v={wf.worst_window_pct} suffix="%" colorize /></span> : null}
+        </span>],
+        ["Bootstrap return", r ? (
+          <span key="2"><Num v={r.p5} suffix="%" colorize /> / <Num v={r.p50} suffix="%" colorize /> / <Num v={r.p95} suffix="%" colorize /> <span style={{ color: dim }}>(P5/P50/P95)</span></span>
+        ) : (<span key="2" style={{ color: dim }}>{mc?.error ?? "—"}</span>)],
+        ["vs benchmark", benchmark && !benchmark.error ? (
+          <span key="3">{benchmark.benchmark}: excess <Num v={benchmark.excess_return_pct} suffix="%" colorize /> · IR <Num v={benchmark.information_ratio} /></span>
+        ) : (<span key="3" style={{ color: dim }}>{benchmark?.error ?? "—"}</span>)],
+        ["Run card", <span key="4" style={{ color: dim }}>{runCard?.id ?? "—"}</span>],
+      ]}
+    />
+  );
+}
+
+function EquityChart({
+  points,
+  benchmark,
+}: {
+  points: { t: number; equity: number }[];
+  benchmark?: { t: number; equity: number }[];
+}) {
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -452,13 +502,27 @@ function EquityChart({ points }: { points: { t: number; equity: number }[] }) {
     series.setData(
       points.map((p) => ({ time: Math.floor(p.t / 1000) as never, value: p.equity }))
     );
+    // Benchmark overlay (buy-and-hold, rebased server-side to the same
+    // starting equity) — the "did it beat doing nothing" line.
+    if (benchmark && benchmark.length > 1) {
+      const bench = chart.addLineSeries({
+        color: "#e0af68",
+        lineWidth: 1,
+        lineStyle: 2, // dashed
+        priceLineVisible: false,
+        lastValueVisible: false,
+      });
+      bench.setData(
+        benchmark.map((p) => ({ time: Math.floor(p.t / 1000) as never, value: p.equity }))
+      );
+    }
     chart.timeScale().fitContent();
     const unobserve = observeChartWidth(el, chart);
     return () => {
       unobserve();
       chart.remove();
     };
-  }, [points]);
+  }, [points, benchmark]);
 
   return <div ref={ref} style={{ width: "100%", marginTop: 10 }} />;
 }

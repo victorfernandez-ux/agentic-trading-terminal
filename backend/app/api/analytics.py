@@ -13,6 +13,7 @@ import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.analytics import run_cards, validation
 from app.analytics.backtest import STRATEGIES, run_backtest
 from app.analytics.options import bs_price_greeks, implied_vol
 from app.analytics.personas import consult_personas
@@ -78,6 +79,12 @@ class BacktestRequest(BaseModel):
     limit: int = Field(default=365, ge=10, le=2000)
     initial_cash: float = Field(default=10_000.0, gt=0)
     fee_bps: float = Field(default=10.0, ge=0, le=200)
+    # Credibility layer (roadmap B): walk-forward + bootstrap bands, and a
+    # buy-and-hold comparison. benchmark: "auto" -> SPY/BTC-USD by asset
+    # class, explicit symbol, or "" to skip. save_card persists the run.
+    validate_run: bool = False
+    benchmark: str = "auto"
+    save_card: bool = False
 
 
 @router.post("/backtest")
@@ -85,16 +92,53 @@ async def backtest(req: BacktestRequest) -> dict:
     if req.strategy not in STRATEGIES:
         raise HTTPException(400, f"unknown strategy; available: {sorted(STRATEGIES)}")
     try:
+        ppy = _ppy(req.symbol, req.timeframe)
         bars = await _bars(req.symbol, req.timeframe, req.limit)
         out = run_backtest(bars, strategy=req.strategy, params=req.params,
                            initial_cash=req.initial_cash, fee_bps=req.fee_bps,
-                           periods_per_year=_ppy(req.symbol, req.timeframe))
-        return {"symbol": req.symbol, "timeframe": req.timeframe, **out}
+                           periods_per_year=ppy)
+        result = {"symbol": req.symbol, "timeframe": req.timeframe, **out}
+        if out.get("error"):
+            return result
+        if req.validate_run:
+            result["validation"] = {
+                "walk_forward": validation.walk_forward(
+                    bars, strategy=req.strategy, params=req.params,
+                    fee_bps=req.fee_bps, periods_per_year=ppy),
+                "monte_carlo": validation.bootstrap_bands(out["trades"]),
+            }
+        bench_symbol = (validation.default_benchmark(req.symbol)
+                        if req.benchmark == "auto" else (req.benchmark or None))
+        if bench_symbol:
+            try:  # benchmark is context, never fatal
+                bench_bars = await _bars(bench_symbol, req.timeframe, req.limit)
+                result["benchmark"] = validation.benchmark_compare(
+                    out["equity_curve"], bench_bars, bench_symbol,
+                    periods_per_year=ppy)
+            except Exception:  # noqa: BLE001
+                result["benchmark"] = {"error": f"benchmark {bench_symbol} unavailable"}
+        if req.save_card:
+            result["run_card"] = run_cards.save_run_card(result)
+        return result
     except TypeError as e:
         raise HTTPException(400, f"bad strategy params: {e}") from e
     except Exception as e:  # noqa: BLE001
         log.warning("backtest failed for %s: %s", req.symbol, e)
         return {"symbol": req.symbol, "error": f"{type(e).__name__}: {str(e)[:160]}"}
+
+
+@router.get("/backtest/runs")
+async def backtest_runs(limit: int = 50) -> list[dict]:
+    """Run-card index, newest first (roadmap B1)."""
+    return run_cards.list_run_cards(limit=min(max(limit, 1), 200))
+
+
+@router.get("/backtest/runs/{card_id}")
+async def backtest_run(card_id: str) -> dict:
+    card = run_cards.get_run_card(card_id)
+    if card is None:
+        raise HTTPException(404, "run card not found")
+    return card
 
 
 class DCFRequest(BaseModel):

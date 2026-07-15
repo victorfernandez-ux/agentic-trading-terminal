@@ -147,6 +147,22 @@ PortfolioSwitcher dropdown in the Approval Queue title (both layouts) filters qu
 `?portfolio_id=`; "default" keeps the unfiltered view; hidden until a second portfolio exists.
 Also: postcss forced to >=8.5.10 via npm override (Dependabot GHSA-qx2v-qp2m-jg93, moderate).
 Backend tests: **209**.
+**v1.14 (July 14, 2026):** ROADMAP.md Phase B — backtest credibility layer. `app/analytics/
+validation.py` (pure, no I/O): **walk-forward** (n contiguous test windows fed by a warm-up prefix;
+per-window return/sharpe/trades; `one_regime` flag = overall profit carried by a single positive
+window; `holds` = majority positive and not one-regime), **bootstrap bands** (trade-sequence
+resampling, deterministic seed, P5/P50/P95 final return + max-drawdown), **benchmark_compare**
+(excess return + information ratio vs buy-and-hold SPY/BTC-USD auto-picked by asset class, never vs
+itself; returns a `curve` rebased to strategy starting equity for the chart overlay).
+`app/analytics/run_cards.py` (B1): every saved run writes `<id>.json` + `<id>.md` under RUNS_DIR
+(default `.private/runs/`, gitignored; tests point RUNS_DIR at a temp dir in conftest) with
+engine_version + inputs + seed = reproducible; newest-first index; path-traversal guard.
+`POST /analytics/backtest` gains `validate_run` / `benchmark` ("auto"|symbol|"" to skip) /
+`save_card` — defaults preserve the old response shape; `GET /analytics/backtest/runs[/{id}]`.
+Frontend Backtest tab runs validated+carded: Validation block (verdict/bands/excess/IR/card id) +
+dashed benchmark overlay on the equity chart. `run_backtest` agent tool returns the compact
+credibility block (verdicts + bands, no curves) so debate evidence cites validated numbers.
+Note: pydantic reserves `validate` — hence `validate_run`. Backend tests: **224**.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README
