@@ -216,7 +216,7 @@ no-new-privileges, localhost-only ports incl. db/redis, versioned tags — pin d
 NOT built in-session, run `docker compose build` before deploying). (G2) **LLM retry**:
 complete_json retries once on empty/unparseable output with the failure described in the prompt,
 then raises typed LLMResponseError (the silent `{"raw": ...}` path is gone); retries count toward
-G1 usage. Backend tests: **299**.
+G1 usage. Backend tests: **302** (after verification fixes: CSRF loopback alias, kill-switch 503, est_price on manual proposals — all found/added during the live end-to-end verification pass).
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README
