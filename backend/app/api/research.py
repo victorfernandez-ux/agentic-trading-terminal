@@ -10,9 +10,23 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.research import hypotheses
+from app.research import hypotheses, scan_loop
 
 router = APIRouter(prefix="/research", tags=["research"])
+
+
+class ScanRequest(BaseModel):
+    screen: str | None = None    # default: settings.scan_screen
+    universe: str | None = None  # default: settings.scan_universe
+
+
+@router.post("/scan/run")
+async def scan_run(req: ScanRequest | None = None) -> dict:
+    """Run one scan->research pass now (roadmap A3). Rate-capped by
+    SCAN_AUTO_RESEARCH_PER_HOUR; proposals only."""
+    req = req or ScanRequest()
+    return await scan_loop.scan_once(screen=req.screen, universe=req.universe,
+                                     source="scan_manual")
 
 
 class HypothesisCreate(BaseModel):

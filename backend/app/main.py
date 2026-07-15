@@ -27,17 +27,23 @@ init_db()
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run the alert evaluator for the app's lifetime (single task,
-    Grafana-style scheduler — never one per connection)."""
+    """Run the alert evaluator (and, opt-in, the scan loop) for the app's
+    lifetime — single tasks, never one per connection."""
     from app.alerts.engine import evaluator_loop
 
-    task = asyncio.create_task(evaluator_loop(), name="alert-evaluator")
+    tasks = [asyncio.create_task(evaluator_loop(), name="alert-evaluator")]
+    if settings.scan_auto_research_enabled:
+        from app.research.scan_loop import scan_loop
+
+        tasks.append(asyncio.create_task(scan_loop(), name="scan-loop"))
     try:
         yield
     finally:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 app = FastAPI(
