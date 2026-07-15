@@ -22,16 +22,27 @@ const STATUS_COLOR: Record<string, string> = {
   REJECTED: "#f7768e",
 };
 
-export default function ApprovalQueue({ refreshKey, onChange }: { refreshKey: number; onChange?: () => void }) {
+export default function ApprovalQueue({
+  refreshKey,
+  onChange,
+  portfolio = "default",
+}: {
+  refreshKey: number;
+  onChange?: () => void;
+  portfolio?: string;
+}) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
+  // "default" keeps the unfiltered view (legacy orders may predate
+  // portfolio stamping); any other portfolio filters server-side.
   const load = useCallback(() => {
-    apiFetch("/api/orders")
+    const qs = portfolio !== "default" ? `?portfolio_id=${encodeURIComponent(portfolio)}` : "";
+    apiFetch(`/api/orders${qs}`)
       .then((r) => r.json())
       .then(setOrders)
       .catch(() => setOrders([]));
-  }, []);
+  }, [portfolio]);
 
   useEffect(() => {
     load();

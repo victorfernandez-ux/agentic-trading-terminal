@@ -13,15 +13,24 @@ type Position = {
   unrealized_pnl_pct: number | null;
 };
 
-export default function Positions({ refreshKey }: { refreshKey: number }) {
+export default function Positions({
+  refreshKey,
+  portfolio = "default",
+}: {
+  refreshKey: number;
+  portfolio?: string;
+}) {
   const [rows, setRows] = useState<Position[]>([]);
 
+  // "default" keeps the unfiltered view (legacy orders may predate
+  // portfolio stamping); any other portfolio filters server-side.
   const load = useCallback(() => {
-    apiFetch("/api/orders/positions/all")
+    const qs = portfolio !== "default" ? `?portfolio_id=${encodeURIComponent(portfolio)}` : "";
+    apiFetch(`/api/orders/positions/all${qs}`)
       .then((r) => r.json())
       .then((d) => setRows(Array.isArray(d) ? d : []))
       .catch(() => setRows([]));
-  }, []);
+  }, [portfolio]);
 
   // Reload on approval (refreshKey) and poll every 15s for live P&L.
   useEffect(() => {

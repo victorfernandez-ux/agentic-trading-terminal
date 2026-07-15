@@ -12,6 +12,7 @@ import News from "@/components/News";
 import Alerts from "@/components/Alerts";
 import FearGreed from "@/components/FearGreed";
 import MobileNav, { type MobileTab } from "@/components/MobileNav";
+import PortfolioSwitcher from "@/components/PortfolioSwitcher";
 import useIsMobile from "@/lib/useIsMobile";
 import { apiFetch, getToken, setToken, UNAUTHORIZED_EVENT } from "@/lib/api";
 
@@ -29,6 +30,9 @@ export default function Terminal() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [watch, setWatch] = useState<string[]>(DEFAULT_WATCH);
+  // Selected portfolio filters ApprovalQueue + Positions; "default"
+  // preserves the pre-portfolio (unfiltered) view.
+  const [portfolio, setPortfolio] = useState("default");
 
   // Hydrate the persisted watchlist after mount (avoids SSR mismatch).
   useEffect(() => {
@@ -148,8 +152,9 @@ export default function Terminal() {
     search: <SymbolSearch onAdd={addSymbol} />,
     chart: <PriceChart symbol={symbol} liveQuote={quotes[symbol]} />,
     agent: <AgentConsole symbol={symbol} onProposed={bump} />,
-    approval: <ApprovalQueue refreshKey={refreshKey} onChange={bump} />,
-    positions: <Positions refreshKey={refreshKey} />,
+    approval: <ApprovalQueue refreshKey={refreshKey} onChange={bump} portfolio={portfolio} />,
+    positions: <Positions refreshKey={refreshKey} portfolio={portfolio} />,
+    portfolioSwitcher: <PortfolioSwitcher value={portfolio} onChange={setPortfolio} />,
     analytics: <Analytics symbol={symbol} onSelect={addSymbol} />,
     news: <News symbol={symbol} />,
     alerts: <Alerts symbol={symbol} />,
@@ -228,7 +233,9 @@ export default function Terminal() {
 
         <div className={view("orders")}>
           <section className="panel">
-            <h2 className="panel-title">Approval Queue</h2>
+            <h2 className="panel-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              Approval Queue {panels.portfolioSwitcher}
+            </h2>
             {panels.approval}
           </section>
           <section className="panel">
@@ -301,7 +308,9 @@ export default function Terminal() {
         </section>
 
         <section className="panel" style={{ gridArea: "approval" }}>
-          <h2 className="panel-title">Approval Queue</h2>
+          <h2 className="panel-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            Approval Queue {panels.portfolioSwitcher}
+          </h2>
           {panels.approval}
         </section>
 
