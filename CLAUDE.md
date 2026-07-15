@@ -22,6 +22,11 @@ Next.js frontend (`frontend/`), SQLite by default.
   ApprovalQueue · Positions · Analytics
 - Tests: `backend/tests/` (pytest; run from `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`)
 
+## Working preferences (owner-set)
+- **No recurring/hourly self check-ins for PR babysitting.** Do not schedule `send_later`/cron
+  wakeups to poll PR state. Rely on webhook events (`subscribe_pr_activity`) only; if those can't
+  cover something, say so once and stop — the owner will nudge when they want a re-check.
+
 ## Quirks that will bite you
 - **Restart the backend after backend changes** — hot-reload misfires on this synced folder.
   Cleanest: repo-root `start-backend-logged.bat` (kills :8000 zombies incl. orphaned
