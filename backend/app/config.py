@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     scan_interval_minutes: int = 60
     scan_screen: str = "composite_bullish"
     scan_universe: str = "sp100"
+    # Backtest run cards (roadmap B1): artifact directory, gitignored.
+    runs_dir: str = ".private/runs"
 
 
 settings = Settings()
