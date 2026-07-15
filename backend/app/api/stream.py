@@ -49,11 +49,17 @@ async def _fetch_quotes(symbols: list[str]) -> list[dict]:
 async def ws_quotes(ws: WebSocket) -> None:
     await ws.accept()
     # Single-user token auth (HTTP middleware doesn't cover WebSockets).
-    # Browsers can't set WS headers, so the token rides a query param.
-    if settings.api_token and ws.query_params.get("token") != settings.api_token:
-        await ws.send_json({"type": "error", "error": "missing or invalid API token"})
-        await ws.close(code=4401)
-        return
+    # Browsers can't set WS headers, so auth rides a query param — either
+    # the long-lived ?token= or, preferred, a single-use ?ticket= (F1).
+    if settings.api_token:
+        from app.core import tickets
+
+        token_ok = ws.query_params.get("token") == settings.api_token
+        ticket_ok = tickets.redeem(ws.query_params.get("ticket"))
+        if not (token_ok or ticket_ok):
+            await ws.send_json({"type": "error", "error": "missing or invalid API token"})
+            await ws.close(code=4401)
+            return
     raw = ws.query_params.get("symbols", "")
     symbols = [s.strip().upper() for s in raw.split(",") if s.strip()][:MAX_SYMBOLS]
     try:

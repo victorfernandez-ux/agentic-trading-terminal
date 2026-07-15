@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
-from app.api import (agents, alerts, analytics, audit, health, market,
+from app.api import (agents, alerts, analytics, audit, auth, health, market,
                      memory, orders, portfolios, research, stream)
 from app.config import settings
 from app.core import db
@@ -88,9 +88,14 @@ async def require_api_token(request: Request, call_next):
     session."""
     token = settings.api_token
     if token and request.url.path not in AUTH_EXEMPT_PATHS:
+        from app.core import tickets
+
         header_ok = request.headers.get("authorization") == f"Bearer {token}"
         query_ok = request.query_params.get("token") == token
-        if not (header_ok or query_ok):
+        # One-time tickets (F1): single-use ?ticket= for SSE — a leaked
+        # URL is worthless after the connection that redeemed it.
+        ticket_ok = tickets.redeem(request.query_params.get("ticket"))
+        if not (header_ok or query_ok or ticket_ok):
             return JSONResponse(status_code=401,
                                 content=_error_body(401, "missing or invalid API token"))
     return await call_next(request)
@@ -129,6 +134,7 @@ async def unhandled_error(request: Request, exc: Exception) -> JSONResponse:
                         content=_error_body(500, "internal server error"))
 
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(market.router)
 app.include_router(analytics.router)
 app.include_router(agents.router)
