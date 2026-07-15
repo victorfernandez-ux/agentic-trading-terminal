@@ -205,6 +205,15 @@ async def research_node(state: AgentState) -> AgentState:
                 state["market"]["reflections"] = notes
     except Exception:  # noqa: BLE001
         pass
+    # Approver history (roadmap D1): how past proposals on this symbol were
+    # decided and how they worked out. DB-only, guarded.
+    try:
+        from app.analytics import behavior
+        approver = behavior.symbol_note(symbol)
+        if approver:
+            state["market"]["approver_history"] = approver
+    except Exception:  # noqa: BLE001
+        pass
     audit_log("agent.research.data", {"run_id": state.get("run_id"), "symbol": symbol,
                                       "market": state["market"]})
     return state

@@ -142,6 +142,15 @@ async def backtest_run(card_id: str) -> dict:
     return card
 
 
+@router.get("/behavior")
+async def behavior_profile(portfolio_id: str | None = None) -> dict:
+    """Approver shadow profile (roadmap D1) — read-only analytics over the
+    order store + reflection memory; never touches the approval gate."""
+    from app.analytics import behavior
+
+    return await behavior.profile(portfolio_id)
+
+
 @router.get("/correlations")
 async def correlations(symbols: str, window: int = 60) -> dict:
     """Rolling return correlation matrix (roadmap C3). `symbols` is a
