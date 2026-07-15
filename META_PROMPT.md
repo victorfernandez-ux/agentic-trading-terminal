@@ -6,7 +6,7 @@ You are working on the **Agentic Trading Terminal** in this folder. Read `CLAUDE
 (current state, gotchas) and `PROJECT_PLAN.md` (vision) first, then execute the development plan below
 **in order**. When you finish a cycle, update `HANDOFF.md` and rewrite this file for the next one.
 
-## Context (July 14, 2026 — v1.13)
+## Context (July 14, 2026 — v1.14)
 
 Everything through v1.12 (see HANDOFF.md: SSE streaming, options analytics, discovery layer, alerts
 engine + alert→research loop, research→debate→risk→portfolio graph, hardening, auth + portfolios,
@@ -16,7 +16,7 @@ migration 0003) injected into debate evidence (REFLECTIONS_LIMIT); (A2) hypothes
 idea→runs→orders→outcome as one traceable object (`app/research/hypotheses.py`, migration 0004,
 `/research/hypotheses`, `run_propose(hypothesis_id=)`); (A3) scan→research loop —
 `POST /research/scan/run` or opt-in schedule, audit-counted crash-safe cap
-(SCAN_AUTO_RESEARCH_PER_HOUR); (A4) portfolio switcher in the frontend. Backend tests: **209**.
+(SCAN_AUTO_RESEARCH_PER_HOUR); (A4) portfolio switcher in the frontend. **v1.14 = Phase B**: backtest credibility — walk-forward windows (one_regime/holds verdicts), bootstrap P5/P50/P95 bands (deterministic seed), benchmark excess+IR with chart overlay curve (app/analytics/validation.py), reproducible run cards (app/analytics/run_cards.py, RUNS_DIR), validate_run/benchmark/save_card flags on POST /analytics/backtest + GET /analytics/backtest/runs, validated Backtest tab, compact credibility block in the run_backtest agent tool. Backend tests: **224**.
 `ROADMAP.md` sequences the remaining Vibe-Trading-derived phases (B–G) — it is the plan of record;
 Vibe-Trading (HKUDS) is MIT: adapting its code is allowed WITH attribution; FinceptTerminal stays
 clean-room (AGPL).
@@ -33,32 +33,31 @@ Yahoo-primary data, LLM via OpenRouter.
 
 ## Development plan (do in order; each item: tests green → commit → next)
 
-Phase A is complete. Next cycle = **ROADMAP.md Phase B (backtest credibility)**, then quick wins:
+Phases A+B are complete. Next cycle = **ROADMAP.md Phase C (data & signal breadth) + G1**:
 
-1. **B1 — Run cards.** Every backtest run writes `run_card.json` (+ Markdown): params, data window,
-   metrics, engine version, artifact paths. Store under `.private/runs/` (gitignored) with a
-   `GET /analytics/backtest/runs` index. Deterministic + reproducible.
+1. **C1 — Provider fallback chain, formalized.** Refactor `app/data/providers.py` to an ordered,
+   per-market chain: least-ban-risk first, key-gated last, **no silent fallback** (every hop
+   logged/audited). Add **Stooq** as a second keyless equities source. Cache staleness rule:
+   never cache a bar range that ends today (screener bar cache included).
 
-2. **B2 — Walk-forward validation.** Rolling train/test windows over the existing engine; per-window
-   and aggregate metrics; flag one-regime strategies. Pure functions in `analytics/`, exposed as
-   optional flags on the existing `/analytics/backtest` endpoint.
+2. **C2 — Alpha factor pack.** `app/analytics/factors.py`: 10-20 classic factors (alpha101
+   formulas, momentum, 52-week-high proximity, Amihud illiquidity), PIT-safe (only data <= bar
+   date, shift-asserted in tests); screener gains factor-rank conditions; scan loop can rank by
+   factor score.
 
-3. **B3 — Monte Carlo + bootstrap confidence intervals.** Resample trade sequences; report
-   P5/P50/P95 final equity and max-drawdown bands alongside the point metrics.
+3. **C3 — Watchlist correlation heatmap.** Rolling return correlations (pure function +
+   `get_correlations` agent tool + small heatmap in the Analytics panel).
 
-4. **B4 — Benchmark panel.** Buy-and-hold SPY (equities) / BTC-USD (crypto) over the same window:
-   benchmark return, excess return, information ratio. Yahoo keyless path.
+4. **G1 — Per-run LLM usage + cost.** Capture provider/model/token usage per llm.complete_json
+   call, aggregate per run_propose, audit as `agent.llm_usage`, static price table -> estimated
+   cost per proposal shown in AgentConsole + SSE payload.
 
-5. **Frontend Analytics panel:** equity-curve chart gains CI bands + benchmark overlay; run list
-   from B1. Research agent's `run_backtest` tool returns the validated metrics so debate evidence
-   can cite "walk-forward holds/breaks".
-
-6. **Docs sync.** Update README/HANDOFF/ROADMAP (tick Phase B), rewrite this meta prompt for
-   Phase C/G (data breadth + LLM cost observability — see ROADMAP.md).
+5. **Docs sync.** Update README/HANDOFF/ROADMAP (tick C+G1), rewrite this meta prompt for
+   Phase D (approver shadow profile) + E (MCP server, Telegram) — see ROADMAP.md.
 
 ## Working rules
 
-- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (209+ green).
+- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (224+ green).
   (Linux/CI: `backend/.venv/bin/python -m pytest -q`.)
 - **Restart the backend after backend changes** — use repo-root `start-backend-logged.bat`
   (kills :8000 zombies incl. orphaned `--multiprocessing-fork` reload workers, logs to

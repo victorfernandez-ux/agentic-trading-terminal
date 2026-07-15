@@ -1,4 +1,4 @@
-# ROADMAP — Vibe-Trading adoption plan (v1.2 — Phase A DONE July 14, 2026)
+# ROADMAP — Vibe-Trading adoption plan (v1.3 — Phases A+B DONE July 14, 2026)
 
 **Date:** July 13, 2026 · **Source research:** [HKUDS/Vibe-Trading](https://github.com/HKUDS/Vibe-Trading)
 README + full [release history](https://github.com/HKUDS/Vibe-Trading/releases) (v0.1.4→v0.1.11) +
