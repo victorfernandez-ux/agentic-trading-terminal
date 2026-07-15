@@ -182,6 +182,24 @@ stream summarize per model and audit `agent.llm_usage`; payload gains `llm_usage
 {calls, tokens, est_cost_usd, by_model} from a static per-1M price table (longest-prefix match;
 unknown model → cost None, partial totals never shown as full); AgentConsole renders the 🧮 cost
 line. Backend tests: **257**.
+**v1.16 (July 15, 2026):** ROADMAP.md Phase D + E. (D1) **approver shadow profile** — the
+differentiator: `app/analytics/behavior.py` profiles the human approver from the order store +
+reflection memory (the journal Vibe-Trading's Shadow Account must import, we already own): approval
+rates overall/by side/by source, realized outcomes off round trips (win rate, avg win/loss,
+disposition-effect flag when winners are held <0.75x as long as losers), counterfactual P&L of
+rejections marked at latest quotes (one spark batch; positive = missed gains, negative = dodged
+losses), overtrading stats. `GET /analytics/behavior`, Behavior tab, and research_node injects a
+DB-only per-symbol approver-history line into debate evidence. Read-only — the gate is untouched.
+(E1) **MCP server**: `app/mcp_server.py` (official `mcp` SDK — new dep, FastMCP) exposes the tool
+registry (quote/bars/indicators/risk/validated backtest/screener/news/chain/fear&greed/correlations/
+hypothesis) + run_research + propose_order over stdio or SSE (`python -m app.mcp_server`).
+**Propose-only by construction**: no approve/reject/execute/submit tool exists; propose_order's
+ceiling is a PENDING_APPROVAL order (source="mcp"); the surface + forbidden-name rule are pinned by
+test_mcp_server.py. (E2) **Telegram notifications**: `app/notify/` thin adapter dispatch
+(fire-and-forget, no-op without a loop, errors contained) + Telegram Bot API adapter (httpx, no SDK),
+off unless TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID are set; fired alerts + new PENDING_APPROVAL
+proposals push a message linking back to PUBLIC_BASE_URL — no inline buttons, approval never leaves
+the app. Backend tests: **278**.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README

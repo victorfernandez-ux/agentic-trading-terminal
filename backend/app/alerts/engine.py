@@ -53,6 +53,9 @@ def _record_fired(alert: dict, value: float) -> dict:
     }
     _FIRED.append(event)
     audit_log("alert.fired", event)
+    # Telegram/IM push (roadmap E2): best-effort, never blocks the tick.
+    from app.notify import notify_bg
+    notify_bg("alert.fired", event)
     return event
 
 

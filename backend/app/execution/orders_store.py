@@ -52,6 +52,10 @@ def create_pending(order: dict) -> dict:
                        portfolio_id=record["portfolio_id"], data=record))
         s.commit()
     audit_log("order.proposed", record)
+    # Telegram/IM push (roadmap E2): announce the pending proposal with a
+    # link into the terminal — approval itself never leaves the app.
+    from app.notify import notify_bg
+    notify_bg("order.pending", record)
     return record
 
 

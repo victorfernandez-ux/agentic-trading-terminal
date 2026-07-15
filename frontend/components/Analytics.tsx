@@ -12,7 +12,7 @@ import { apiFetch } from "@/lib/api";
 import { createChart, type IChartApi } from "lightweight-charts";
 import { observeChartWidth } from "@/lib/chartWidth";
 
-const TABS = ["Signal", "Risk", "Backtest", "DCF", "Personas", "Options", "Screener", "Corr"] as const;
+const TABS = ["Signal", "Risk", "Backtest", "DCF", "Personas", "Options", "Screener", "Corr", "Behavior"] as const;
 type Tab = (typeof TABS)[number];
 
 const dim = "#5c6773";
@@ -108,6 +108,8 @@ export default function Analytics({
         res = await apiFetch(
           `/api/analytics/correlations?symbols=${encodeURIComponent(watchlist.join(","))}&window=60`
         );
+      } else if (tab === "Behavior") {
+        res = await apiFetch(`/api/analytics/behavior`);
       } else {
         res = await apiFetch(
           `/api/analytics/screener?screen=${screen}&universe=${universe}&top=15`
@@ -125,7 +127,7 @@ export default function Analytics({
   useEffect(() => {
     setData(null);
     if (tab !== "Options") setExpiration(null);
-    if (tab === "Signal" || tab === "Risk" || tab === "Options" || tab === "Corr") void run();
+    if (tab === "Signal" || tab === "Risk" || tab === "Options" || tab === "Corr" || tab === "Behavior") void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, symbol, expiration]);
 
@@ -257,6 +259,39 @@ export default function Analytics({
           window={d.window}
           skipped={d.skipped}
         />
+      )}
+
+      {tab === "Behavior" && d.proposals_decided !== undefined && (
+        <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+          <KV
+            rows={[
+              ["Decided (appr/rej)", <span key="1">{d.proposals_decided} ({d.approved}/{d.rejected})</span>],
+              ["Approval rate", <Num key="2" v={d.approval_rate_pct} suffix="%" />],
+              ["Buy vs sell appr.", <span key="3">
+                <Num v={d.by_side?.buy?.approval_rate_pct} suffix="%" /> / <Num v={d.by_side?.sell?.approval_rate_pct} suffix="%" />
+              </span>],
+              ["Max fills / day", <span key="4">{d.activity?.max_fills_per_day ?? "—"}</span>],
+            ]}
+          />
+          <KV
+            rows={[
+              ["Realized P&L", <Num key="1" v={d.outcomes?.realized_pnl} suffix=" $" colorize />],
+              ["Win rate", <Num key="2" v={d.outcomes?.win_rate_pct} suffix="%" />],
+              ["Hold: winners / losers", <span key="3">
+                <Num v={d.outcomes?.avg_hold_days_winners} suffix="d" /> / <Num v={d.outcomes?.avg_hold_days_losers} suffix="d" />
+                {d.outcomes?.disposition_effect ? <b style={{ color: red }}> ⚠ disposition</b> : null}
+              </span>],
+              ["Rejections would be", d.rejections?.counterfactual_pnl != null ? (
+                <span key="4">
+                  <Num v={d.rejections.counterfactual_pnl} suffix=" $" colorize />{" "}
+                  <span style={{ color: dim }}>
+                    ({d.rejections.counterfactual_pnl > 0 ? "missed gains" : "dodged losses"}, {d.rejections.evaluated} orders)
+                  </span>
+                </span>
+              ) : (<span key="4" style={{ color: dim }}>—</span>)],
+            ]}
+          />
+        </div>
       )}
 
       {tab === "Personas" && !data && (

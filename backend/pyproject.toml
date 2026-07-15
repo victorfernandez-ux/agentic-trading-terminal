@@ -16,6 +16,7 @@ dependencies = [
     # Agent engine + LLM
     "langgraph>=0.2",
     "openai>=1.54",  # OpenAI-compatible client, pointed at OpenRouter
+    "mcp>=1.0",      # MCP server over the agent tool registry (propose-only)
     # Data / brokers (wire up in Phase 1)
     "alpaca-py>=0.33",
     "ccxt>=4.4",
