@@ -24,6 +24,7 @@ import asyncio
 import random
 import time
 
+from app.analytics.factors import compute_factors
 from app.analytics.risk import simple_returns
 from app.analytics.technical import rsi, sma
 from app.data.providers import get_provider
@@ -92,6 +93,9 @@ def _metrics(bars: list[dict]) -> dict | None:
         "pct_off_52w_low": round((closes[-1] / lo_52w - 1) * 100, 1) if lo_52w else None,
         "rvol": rvol,
         "signal_score": score,
+        # Alpha factor pack (roadmap C2): PIT-safe classics for the
+        # factor_* screens; None where history is short.
+        **compute_factors(bars),
     }
 
 
@@ -135,6 +139,24 @@ def _screens() -> dict:
             lambda m: m["signal_score"] <= -2,
             lambda m: f"composite signal {m['signal_score']:+d}",
             lambda m: m["signal_score"], False),
+        # Factor screens (roadmap C2) — classic anomalies, ranked in code.
+        "factor_momentum": (
+            lambda m: m["mom_12_1"] is not None and m["mom_12_1"] > 0,
+            lambda m: f"12-1 momentum {m['mom_12_1']:+.1f}%",
+            lambda m: m["mom_12_1"], True),
+        "factor_low_vol": (
+            lambda m: m["volatility_60d"] is not None,
+            lambda m: f"60d vol {m['volatility_60d']}% (low-vol anomaly)",
+            lambda m: m["volatility_60d"], False),
+        "factor_52w_high": (
+            lambda m: (m["high_52w_proximity"] is not None
+                       and m["high_52w_proximity"] >= 0.95),
+            lambda m: f"at {m['high_52w_proximity']:.0%} of 52w high (George-Hwang)",
+            lambda m: m["high_52w_proximity"], True),
+        "factor_reversal": (
+            lambda m: m["reversal_1m"] is not None and m["reversal_1m"] > 5.0,
+            lambda m: f"1m selloff {m['reversal_1m']:.1f}% (Jegadeesh reversal)",
+            lambda m: m["reversal_1m"], True),
     }
 
 
