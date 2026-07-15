@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     scan_universe: str = "sp100"
     # Backtest run cards (roadmap B1): artifact directory, gitignored.
     runs_dir: str = ".private/runs"
+    # Kill switch (roadmap F3): if this file exists, every broker
+    # submission raises TradingHalted. `touch` it to halt, delete to resume.
+    kill_switch_file: str = ".private/KILL_SWITCH"
     # Telegram notifications (roadmap E2): off unless BOTH are set.
     # Informational only — approval always happens in the app.
     telegram_bot_token: str | None = None

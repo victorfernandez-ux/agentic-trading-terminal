@@ -101,6 +101,24 @@ async def require_api_token(request: Request, call_next):
     return await call_next(request)
 
 
+@app.middleware("http")
+async def reject_cross_site_writes(request: Request, call_next):
+    """CSRF guard (roadmap F2): a browser-sent unsafe method whose Origin
+    is neither an allowed CORS origin nor this host is rejected OUTRIGHT,
+    before CORS/auth ever see it. Non-browser clients send no Origin and
+    pass; OPTIONS passes so preflights still reach the CORS layer.
+    Registered last -> outermost -> runs first."""
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        origin = request.headers.get("origin")
+        if origin:
+            allowed = {o.strip() for o in settings.cors_origins.split(",") if o.strip()}
+            host_origin = f"{request.url.scheme}://{request.url.netloc}"
+            if origin not in allowed and origin != host_origin:
+                return JSONResponse(status_code=403,
+                                    content=_error_body(403, "cross-site request rejected"))
+    return await call_next(request)
+
+
 # ── Consistent error envelope ───────────────────────────────────────────
 # Every HTTP-error response carries {"detail", "error": {"code", "message"}}.
 # `detail` keeps FastAPI's default shape (existing clients read it); the
