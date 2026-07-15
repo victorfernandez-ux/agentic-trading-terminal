@@ -29,15 +29,29 @@ from app.analytics.technical import rsi, sma
 from app.data.providers import get_provider
 
 _BARS_CACHE: dict[str, tuple[float, list[dict]]] = {}
-_TTL_S = 15 * 60
+# Staleness rule (roadmap C1): a range ending TODAY contains a still-forming
+# bar and must never be treated as durable — short TTL. A range that ends on
+# an earlier day is complete and can safely live much longer.
+_TTL_FORMING_S = 15 * 60
+_TTL_COMPLETE_S = 4 * 60 * 60
 _SEM = asyncio.Semaphore(4)
+
+
+def _ends_today(bars: list[dict]) -> bool:
+    if not bars:
+        return False
+    last = time.gmtime(bars[-1]["t"] / 1000)
+    today = time.gmtime()
+    return (last.tm_year, last.tm_yday) == (today.tm_year, today.tm_yday)
 
 
 async def _bars_cached(symbol: str, limit: int = 260) -> list[dict]:
     now = time.time()
     hit = _BARS_CACHE.get(symbol)
-    if hit and now - hit[0] < _TTL_S:
-        return hit[1]
+    if hit:
+        ttl = _TTL_FORMING_S if _ends_today(hit[1]) else _TTL_COMPLETE_S
+        if now - hit[0] < ttl:
+            return hit[1]
     async with _SEM:
         await asyncio.sleep(random.uniform(0.05, 0.25))  # de-burst cold scans
         data = await get_provider(symbol).get_bars(symbol, timeframe="1D", limit=limit)

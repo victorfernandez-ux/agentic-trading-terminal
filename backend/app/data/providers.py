@@ -2,11 +2,13 @@
 
 Primary source is Yahoo Finance: keyless, broadly reachable (works where
 crypto-exchange APIs are firewalled), and covers BOTH crypto (BTC-USD) and
-equities (AAPL). Per-symbol we try providers in order and the first that
-returns data wins:
+equities (AAPL). Per-symbol we try providers in an explicit ordered chain —
+least ban-risk first, key-gated last (roadmap C1) — and the first that
+returns data wins. Fallback is never silent: every hop is logged AND
+audited (`data.fallback`), so a degraded primary is visible, not hidden.
 
     crypto  -> [Yahoo, CCXT(multi-exchange)]
-    equity  -> [Yahoo, Alpaca?, Polygon?]   (broker providers only if keyed)
+    equity  -> [Yahoo, Stooq(keyless, daily), Alpaca?, Polygon?]
 
 Normalized shapes:
     quote -> {symbol, provider, price, ...}
@@ -15,12 +17,15 @@ Normalized shapes:
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+import logging
+from datetime import date, datetime, timedelta, timezone
 from typing import Protocol
 
 import httpx
 
 from app.config import settings
+
+log = logging.getLogger("data")
 
 _UA = {"User-Agent": "Mozilla/5.0 (compatible; AgenticTradingTerminal/0.1)"}
 
@@ -105,6 +110,65 @@ class YahooProvider:
             bars.append({"t": t * 1000, "o": o[i], "h": h[i], "l": lo[i],
                          "c": c[i], "v": v[i] or 0})
         bars = bars[-limit:]
+        return {"symbol": symbol, "provider": self.name, "timeframe": timeframe,
+                "limit": limit, "bars": bars}
+
+
+# ── Stooq (keyless; US equities, daily bars) ────────────────────────────
+# The second keyless equities source (roadmap C1): CSV over HTTPS, no auth,
+# so a Yahoo throttle/outage degrades to Stooq instead of to nothing.
+# Daily resolution only — intraday requests raise so the chain moves on.
+
+
+class StooqProvider:
+    name = "stooq"
+    BASE = "https://stooq.com/q/d/l/"
+
+    @staticmethod
+    def _sym(symbol: str) -> str:
+        # US listing suffix; class shares use a dash (BRK.B -> brk-b.us).
+        return symbol.lower().replace(".", "-") + ".us"
+
+    @staticmethod
+    def _parse_daily_csv(text: str) -> list[dict]:
+        """Date,Open,High,Low,Close,Volume rows -> normalized bars."""
+        bars: list[dict] = []
+        lines = [ln for ln in text.strip().splitlines() if ln]
+        for ln in lines[1:]:  # skip header
+            parts = ln.split(",")
+            if len(parts) < 6:
+                continue
+            try:
+                day = datetime.strptime(parts[0], "%Y-%m-%d")
+                t = int(day.replace(tzinfo=timezone.utc).timestamp() * 1000)
+                o, h, lo, c = (float(x) for x in parts[1:5])
+                v = float(parts[5]) if parts[5] not in ("", "-") else 0
+            except (ValueError, IndexError):
+                continue
+            bars.append({"t": t, "o": o, "h": h, "l": lo, "c": c, "v": v})
+        return bars
+
+    async def _daily(self, symbol: str) -> list[dict]:
+        async with httpx.AsyncClient(timeout=12, headers=_UA) as c:
+            r = await c.get(self.BASE, params={"s": self._sym(symbol), "i": "d"})
+            r.raise_for_status()
+            bars = self._parse_daily_csv(r.text)
+        if not bars:
+            raise RuntimeError(f"stooq returned no data for {symbol}")
+        return bars
+
+    async def get_quote(self, symbol: str) -> dict:
+        bars = await self._daily(symbol)
+        price = bars[-1]["c"]
+        prev = bars[-2]["c"] if len(bars) > 1 else None
+        pct = round((price - prev) / prev * 100, 2) if price and prev else None
+        return {"symbol": symbol, "provider": self.name,
+                "price": price, "prev_close": prev, "pct_change": pct}
+
+    async def get_bars(self, symbol: str, timeframe: str = "1D", limit: int = 100) -> dict:
+        if timeframe not in ("1d", "1D"):
+            raise ValueError(f"stooq serves daily bars only, not {timeframe}")
+        bars = (await self._daily(symbol))[-limit:]
         return {"symbol": symbol, "provider": self.name, "timeframe": timeframe,
                 "limit": limit, "bars": bars}
 
@@ -229,7 +293,11 @@ class PolygonProvider:
 
 
 class FallbackProvider:
-    """Try each provider in order; first success wins."""
+    """Try each provider in order; first success wins.
+
+    Never silent (roadmap C1): every hop past a failed provider is logged
+    and audited as `data.fallback`, so a degraded primary shows up in the
+    audit trail instead of being masked by the rescue."""
 
     def __init__(self, providers: list[DataProvider]):
         self._providers = providers
@@ -237,11 +305,22 @@ class FallbackProvider:
 
     async def _try(self, method: str, symbol: str, *args):
         last_err: Exception | None = None
-        for p in self._providers:
+        for i, p in enumerate(self._providers):
             try:
                 return await getattr(p, method)(symbol, *args)
             except Exception as e:  # noqa: BLE001
                 last_err = e
+                nxt = self._providers[i + 1] if i + 1 < len(self._providers) else None
+                failed = getattr(p, "name", "?")
+                if nxt is not None:
+                    log.warning("data fallback for %s.%s: %s failed (%s) -> %s",
+                                symbol, method, failed, e, getattr(nxt, "name", "?"))
+                    from app.core.audit import audit_log
+                    audit_log("data.fallback", {
+                        "symbol": symbol, "method": method,
+                        "failed_provider": failed,
+                        "next_provider": getattr(nxt, "name", "?"),
+                        "error": f"{type(e).__name__}: {str(e)[:120]}"})
         raise RuntimeError(f"all data providers failed; last error: {last_err}")
 
     async def get_quote(self, symbol: str) -> dict:
@@ -259,9 +338,10 @@ def _is_crypto(symbol: str) -> bool:
 
 
 def get_provider(symbol: str) -> DataProvider:
+    """Ordered chain, least ban-risk first, key-gated last (roadmap C1)."""
     if _is_crypto(symbol):
         return FallbackProvider([YahooProvider(), CCXTProvider()])
-    chain: list[DataProvider] = [YahooProvider()]
+    chain: list[DataProvider] = [YahooProvider(), StooqProvider()]
     if settings.alpaca_api_key and settings.alpaca_api_secret:
         chain.append(AlpacaProvider())
     if settings.polygon_api_key:
