@@ -132,6 +132,21 @@ async def get_fear_greed_tool(market: str = "stocks") -> dict:
     return await fear_greed(market)
 
 
+async def get_correlations_tool(symbols: list[str], window: int = 60) -> dict:
+    """Tool: return-correlation matrix across symbols — the risk agent's
+    concentration signal (a correlated book is one position, many names)."""
+    from app.analytics.correlations import compute_correlations
+    from app.analytics.screener import _bars_cached
+
+    bars_by_symbol: dict[str, list[dict]] = {}
+    for s in [x.strip().upper() for x in symbols if x.strip()][:20]:
+        try:
+            bars_by_symbol[s] = await _bars_cached(s, limit=window + 40)
+        except Exception:  # noqa: BLE001
+            bars_by_symbol[s] = []
+    return compute_correlations(bars_by_symbol, window=window)
+
+
 async def create_hypothesis_tool(symbol: str, statement: str) -> dict:
     """Tool: register a research hypothesis so runs/orders/outcome link up."""
     from app.research import hypotheses
@@ -174,4 +189,5 @@ TOOLS = {
     "get_fear_greed": get_fear_greed_tool,
     "create_hypothesis": create_hypothesis_tool,
     "update_hypothesis": update_hypothesis_tool,
+    "get_correlations": get_correlations_tool,
 }

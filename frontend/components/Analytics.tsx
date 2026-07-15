@@ -12,7 +12,7 @@ import { apiFetch } from "@/lib/api";
 import { createChart, type IChartApi } from "lightweight-charts";
 import { observeChartWidth } from "@/lib/chartWidth";
 
-const TABS = ["Signal", "Risk", "Backtest", "DCF", "Personas", "Options", "Screener"] as const;
+const TABS = ["Signal", "Risk", "Backtest", "DCF", "Personas", "Options", "Screener", "Corr"] as const;
 type Tab = (typeof TABS)[number];
 
 const dim = "#5c6773";
@@ -46,9 +46,11 @@ function KV({ rows }: { rows: [string, React.ReactNode][] }) {
 export default function Analytics({
   symbol,
   onSelect,
+  watchlist = [],
 }: {
   symbol: string;
   onSelect?: (symbol: string) => void;
+  watchlist?: string[];
 }) {
   const [tab, setTab] = useState<Tab>("Signal");
   const [data, setData] = useState<Record<string, unknown> | null>(null);
@@ -102,6 +104,10 @@ export default function Analytics({
         res = await apiFetch(
           `/api/analytics/options/chain?symbol=${encodeURIComponent(symbol)}&strikes_around=10${exp}`
         );
+      } else if (tab === "Corr") {
+        res = await apiFetch(
+          `/api/analytics/correlations?symbols=${encodeURIComponent(watchlist.join(","))}&window=60`
+        );
       } else {
         res = await apiFetch(
           `/api/analytics/screener?screen=${screen}&universe=${universe}&top=15`
@@ -113,13 +119,13 @@ export default function Analytics({
     } finally {
       setBusy(false);
     }
-  }, [tab, symbol, strategy, dcf, screen, universe, expiration]);
+  }, [tab, symbol, strategy, dcf, screen, universe, expiration, watchlist]);
 
   // Auto-run the cheap GET tabs when symbol/tab changes; POST tabs run on demand.
   useEffect(() => {
     setData(null);
     if (tab !== "Options") setExpiration(null);
-    if (tab === "Signal" || tab === "Risk" || tab === "Options") void run();
+    if (tab === "Signal" || tab === "Risk" || tab === "Options" || tab === "Corr") void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, symbol, expiration]);
 
@@ -241,6 +247,16 @@ export default function Analytics({
       )}
       {tab === "Screener" && Array.isArray(d.matches) && d.matches.length === 0 && d.scanned !== undefined && !busy && (
         <p style={{ color: dim }}>no matches — try another screen or universe</p>
+      )}
+
+      {tab === "Corr" && Array.isArray(d.symbols) && d.symbols.length > 1 && (
+        <CorrHeatmap
+          symbols={d.symbols}
+          matrix={d.matrix}
+          avg={d.avg_abs_correlation}
+          window={d.window}
+          skipped={d.skipped}
+        />
       )}
 
       {tab === "Personas" && !data && (
@@ -525,6 +541,58 @@ function EquityChart({
   }, [points, benchmark]);
 
   return <div ref={ref} style={{ width: "100%", marginTop: 10 }} />;
+}
+
+// Watchlist return-correlation heatmap (roadmap C3). Green = negative
+// correlation (diversifying), red = positive (concentrated).
+function CorrHeatmap({
+  symbols,
+  matrix,
+  avg,
+  window,
+  skipped,
+}: {
+  symbols: string[];
+  matrix: (number | null)[][];
+  avg?: number | null;
+  window?: number;
+  skipped?: string[];
+}) {
+  const bg = (v: number | null) => {
+    if (v === null) return "transparent";
+    const a = Math.min(Math.abs(v), 1) * 0.55;
+    return v >= 0 ? `rgba(247, 118, 142, ${a})` : `rgba(143, 214, 148, ${a})`;
+  };
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table className="num" style={{ fontSize: 10, borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={cell} />
+            {symbols.map((s) => (
+              <th key={s} style={{ ...cell, color: dim }}>{s}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {symbols.map((a, i) => (
+            <tr key={a}>
+              <td style={{ ...cell, color: dim }}>{a}</td>
+              {symbols.map((b, j) => (
+                <td key={b} style={{ ...cell, textAlign: "center", background: bg(matrix[i]?.[j] ?? null) }}>
+                  {matrix[i]?.[j] === null || matrix[i]?.[j] === undefined ? "—" : matrix[i][j]!.toFixed(2)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p style={{ color: dim, marginTop: 6 }}>
+        {window}d returns · avg |ρ| {avg ?? "—"}
+        {skipped?.length ? ` · skipped (thin history): ${skipped.join(", ")}` : ""}
+      </p>
+    </div>
+  );
 }
 
 function TradeList({ trades }: { trades: any[] }) {
