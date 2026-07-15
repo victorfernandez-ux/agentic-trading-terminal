@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     scan_universe: str = "sp100"
     # Backtest run cards (roadmap B1): artifact directory, gitignored.
     runs_dir: str = ".private/runs"
+    # Telegram notifications (roadmap E2): off unless BOTH are set.
+    # Informational only — approval always happens in the app.
+    telegram_bot_token: str | None = None
+    telegram_chat_id: str | None = None
+    # Link target used in notification messages (the PWA/terminal URL).
+    public_base_url: str = "http://localhost:3000"
 
 
 settings = Settings()
