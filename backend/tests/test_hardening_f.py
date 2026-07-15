@@ -83,6 +83,27 @@ async def test_kill_switch_halts_and_releases_claim(tmp_path, monkeypatch):
     assert out["status"] == "SUBMITTED"
 
 
+async def test_kill_switch_maps_to_503_at_api(tmp_path, monkeypatch):
+    """The approver sees WHY (503 + kill-switch message), not a bare 500."""
+    switch = tmp_path / "KILL_SWITCH"
+    monkeypatch.setattr(settings, "kill_switch_file", str(switch))
+    rec = client.post("/orders/propose",
+                      json={"symbol": "KILLB", "side": "buy", "qty": 1,
+                            "order_type": "market", "est_price": 5.0}).json()
+    switch.touch()
+    r = client.post(f"/orders/{rec['id']}/approve")
+    assert r.status_code == 503
+    assert "kill switch" in r.json()["error"]["message"]
+
+
+def test_human_proposal_carries_est_price():
+    """est_price on manual proposals feeds fills + D1 counterfactuals."""
+    rec = client.post("/orders/propose",
+                      json={"symbol": "ESTP", "side": "buy", "qty": 2,
+                            "order_type": "market", "est_price": 42.5}).json()
+    assert rec["est_price"] == 42.5
+
+
 def test_structural_paper_check_fails_closed(monkeypatch):
     monkeypatch.setattr(broker_mod.PaperBroker, "is_paper", False)
     with pytest.raises(RuntimeError, match="structural paper check"):

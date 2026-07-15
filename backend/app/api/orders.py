@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app.execution import orders_store as store
 from app.execution import portfolios
+from app.execution.broker import TradingHalted
 from app.execution.positions import get_positions
 
 router = APIRouter(prefix="/orders", tags=["orders"])
@@ -22,6 +23,11 @@ class OrderProposal(BaseModel):
     qty: float
     order_type: str = "market"
     limit_price: float | None = None
+    # Price snapshot at proposal time. Agent drafts always carry one; for
+    # human proposals it's optional but feeds the fill price and the
+    # behavior profile's rejection counterfactuals (D1) — without it a
+    # rejected manual order can never be scored.
+    est_price: float | None = None
     source: str = "human"  # agent | human
     portfolio_id: str = portfolios.DEFAULT_PORTFOLIO_ID
 
@@ -48,6 +54,10 @@ async def approve(order_id: str) -> dict:
         raise HTTPException(404, "order not found") from None
     except store.InvalidOrderState as e:
         raise HTTPException(409, f"order is {e.status}") from None
+    except TradingHalted as e:
+        # F3 kill switch: tell the approver WHY instead of a generic 500.
+        # The claim was already released — the order stays approvable.
+        raise HTTPException(503, str(e)) from None
 
 
 @router.post("/{order_id}/reject")
