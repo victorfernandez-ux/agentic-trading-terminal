@@ -38,6 +38,7 @@ from app.config import settings
 from app.core.audit import audit_log
 from app.execution import orders_store
 from app.execution.positions import _aggregate
+from app.memory import reflections
 
 # Default notional per proposed trade (paper). Sizing stays in code, not the
 # LLM, so position sizes are always sane and auditable.
@@ -195,6 +196,15 @@ async def research_node(state: AgentState) -> AgentState:
             state["market"]["personas"] = consensus
     if not isinstance(news, BaseException):
         state["market"]["news"] = [h["title"] for h in news.get("headlines", [])]
+    # Reflection memory (roadmap A1): lessons from this symbol's closed round
+    # trips become debate evidence. Guarded — memory never breaks a run.
+    try:
+        if settings.reflections_limit > 0:
+            notes = reflections.recent(symbol, limit=settings.reflections_limit)
+            if notes:
+                state["market"]["reflections"] = notes
+    except Exception:  # noqa: BLE001
+        pass
     audit_log("agent.research.data", {"run_id": state.get("run_id"), "symbol": symbol,
                                       "market": state["market"]})
     return state
@@ -261,6 +271,7 @@ async def debate_node(state: AgentState) -> AgentState:
         "verdict": {"winner": judge.get("winner"), "direction": state["direction"]},
     }
     audit_log("agent.debate", {"run_id": state.get("run_id"), "symbol": symbol,
+                               "thesis": state["thesis"],  # reflections quote it
                                "debate": state["debate"]})
     return state
 

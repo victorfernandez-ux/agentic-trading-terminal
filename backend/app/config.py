@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     # Alert->research loop: max automatic agent runs per rolling hour across
     # all alerts. Proposals only -- the human approval gate is untouched.
     alert_auto_research_per_hour: int = 4
+    # Reflection memory: how many past-round-trip lessons per symbol are
+    # injected into the debate evidence. 0 disables injection.
+    reflections_limit: int = 5
 
 
 settings = Settings()

@@ -58,6 +58,21 @@ class AlertRow(Base):
     data = Column(JSON)
 
 
+class ReflectionRow(Base):
+    """Reflection memory (roadmap A1): one short lesson per closed round
+    trip. `close_order_id` is unique so the fill hook is idempotent;
+    research_node injects the last N per symbol as debate evidence."""
+
+    __tablename__ = "reflections"
+    seq = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(String, unique=True, index=True)
+    ts = Column(String, index=True)
+    symbol = Column(String, index=True)
+    portfolio_id = Column(String, index=True, nullable=True)
+    close_order_id = Column(String, unique=True, index=True)
+    data = Column(JSON)  # full reflection record incl. text + P&L
+
+
 class AuditRow(Base):
     """Append-only audit trail (MVP req #5: log and replay every decision).
 
