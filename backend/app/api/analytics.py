@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.analytics import run_cards, validation
 from app.analytics.backtest import STRATEGIES, run_backtest
+from app.analytics.correlations import compute_correlations
 from app.analytics.options import bs_price_greeks, implied_vol
 from app.analytics.personas import consult_personas
 from app.analytics.risk import compute_risk
@@ -139,6 +140,24 @@ async def backtest_run(card_id: str) -> dict:
     if card is None:
         raise HTTPException(404, "run card not found")
     return card
+
+
+@router.get("/correlations")
+async def correlations(symbols: str, window: int = 60) -> dict:
+    """Rolling return correlation matrix (roadmap C3). `symbols` is a
+    comma-separated query param (crypto '/' breaks path segments)."""
+    syms = [s.strip().upper() for s in symbols.split(",") if s.strip()][:20]
+    if len(syms) < 2:
+        raise HTTPException(422, "need at least 2 symbols")
+    from app.analytics.screener import _bars_cached
+
+    bars_by_symbol: dict[str, list[dict]] = {}
+    for s in syms:  # sequential: _bars_cached already rate-disciplines
+        try:
+            bars_by_symbol[s] = await _bars_cached(s, limit=window + 40)
+        except Exception:  # noqa: BLE001 -- a dead ticker is just skipped
+            bars_by_symbol[s] = []
+    return compute_correlations(bars_by_symbol, window=min(max(window, 20), 250))
 
 
 class DCFRequest(BaseModel):

@@ -163,6 +163,25 @@ Frontend Backtest tab runs validated+carded: Validation block (verdict/bands/exc
 dashed benchmark overlay on the equity chart. `run_backtest` agent tool returns the compact
 credibility block (verdicts + bands, no curves) so debate evidence cites validated numbers.
 Note: pydantic reserves `validate` — hence `validate_run`. Backend tests: **224**.
+**v1.15 (July 14, 2026):** ROADMAP.md Phase C + G1. (C1) **provider chain formalized**: equity chain
+Yahoo → **Stooq** (new keyless daily-bars CSV source, `.us` mapping incl. class shares; intraday
+raises so the chain moves on; quotes derived from last two daily closes) → Alpaca/Polygon (key-gated).
+Fallback never silent — every hop audited as `data.fallback` {failed_provider, next_provider, error}.
+Screener bar cache: never-durable-today rule (range ending today = 15-min TTL; completed ranges 4h).
+(C2) **alpha factor pack**: `app/analytics/factors.py`, 12 PIT-safe classics in pure Python (12-1
+momentum, Jegadeesh reversal, George-Hwang 52w-high, 200d trend, 60d vol, Amihud, Bali MAX, skew,
+volume trend, Kakushadze #101/#12/#53 — public formulas, arXiv:1601.00991); all factor values flow
+into screener rows + four new screens (factor_momentum/low_vol/52w_high/reversal) usable by the scan
+loop; PIT safety pinned by a future-mutation test. (C3) **correlation heatmap**:
+`app/analytics/correlations.py` (Pearson matrix on common timestamps, thin histories pre-filtered so
+one dead ticker can't shrink the intersection, avg |ρ| concentration signal),
+`GET /analytics/correlations?symbols=`, `get_correlations` agent tool, Corr tab heatmap over the live
+watchlist. (G1) **LLM usage + cost**: ContextVar collector in `llm.py` (complete_json appends
+provider-reported tokens inside `track_usage()`; child tasks share the list), run_research + SSE
+stream summarize per model and audit `agent.llm_usage`; payload gains `llm_usage`
+{calls, tokens, est_cost_usd, by_model} from a static per-1M price table (longest-prefix match;
+unknown model → cost None, partial totals never shown as full); AgentConsole renders the 🧮 cost
+line. Backend tests: **257**.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README

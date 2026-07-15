@@ -155,7 +155,7 @@ export default function Terminal() {
     approval: <ApprovalQueue refreshKey={refreshKey} onChange={bump} portfolio={portfolio} />,
     positions: <Positions refreshKey={refreshKey} portfolio={portfolio} />,
     portfolioSwitcher: <PortfolioSwitcher value={portfolio} onChange={setPortfolio} />,
-    analytics: <Analytics symbol={symbol} onSelect={addSymbol} />,
+    analytics: <Analytics symbol={symbol} onSelect={addSymbol} watchlist={watch} />,
     news: <News symbol={symbol} />,
     alerts: <Alerts symbol={symbol} />,
     fearGreed: <FearGreed />,

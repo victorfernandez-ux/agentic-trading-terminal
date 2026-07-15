@@ -24,20 +24,35 @@ import asyncio
 import random
 import time
 
+from app.analytics.factors import compute_factors
 from app.analytics.risk import simple_returns
 from app.analytics.technical import rsi, sma
 from app.data.providers import get_provider
 
 _BARS_CACHE: dict[str, tuple[float, list[dict]]] = {}
-_TTL_S = 15 * 60
+# Staleness rule (roadmap C1): a range ending TODAY contains a still-forming
+# bar and must never be treated as durable — short TTL. A range that ends on
+# an earlier day is complete and can safely live much longer.
+_TTL_FORMING_S = 15 * 60
+_TTL_COMPLETE_S = 4 * 60 * 60
 _SEM = asyncio.Semaphore(4)
+
+
+def _ends_today(bars: list[dict]) -> bool:
+    if not bars:
+        return False
+    last = time.gmtime(bars[-1]["t"] / 1000)
+    today = time.gmtime()
+    return (last.tm_year, last.tm_yday) == (today.tm_year, today.tm_yday)
 
 
 async def _bars_cached(symbol: str, limit: int = 260) -> list[dict]:
     now = time.time()
     hit = _BARS_CACHE.get(symbol)
-    if hit and now - hit[0] < _TTL_S:
-        return hit[1]
+    if hit:
+        ttl = _TTL_FORMING_S if _ends_today(hit[1]) else _TTL_COMPLETE_S
+        if now - hit[0] < ttl:
+            return hit[1]
     async with _SEM:
         await asyncio.sleep(random.uniform(0.05, 0.25))  # de-burst cold scans
         data = await get_provider(symbol).get_bars(symbol, timeframe="1D", limit=limit)
@@ -78,6 +93,9 @@ def _metrics(bars: list[dict]) -> dict | None:
         "pct_off_52w_low": round((closes[-1] / lo_52w - 1) * 100, 1) if lo_52w else None,
         "rvol": rvol,
         "signal_score": score,
+        # Alpha factor pack (roadmap C2): PIT-safe classics for the
+        # factor_* screens; None where history is short.
+        **compute_factors(bars),
     }
 
 
@@ -121,6 +139,24 @@ def _screens() -> dict:
             lambda m: m["signal_score"] <= -2,
             lambda m: f"composite signal {m['signal_score']:+d}",
             lambda m: m["signal_score"], False),
+        # Factor screens (roadmap C2) — classic anomalies, ranked in code.
+        "factor_momentum": (
+            lambda m: m["mom_12_1"] is not None and m["mom_12_1"] > 0,
+            lambda m: f"12-1 momentum {m['mom_12_1']:+.1f}%",
+            lambda m: m["mom_12_1"], True),
+        "factor_low_vol": (
+            lambda m: m["volatility_60d"] is not None,
+            lambda m: f"60d vol {m['volatility_60d']}% (low-vol anomaly)",
+            lambda m: m["volatility_60d"], False),
+        "factor_52w_high": (
+            lambda m: (m["high_52w_proximity"] is not None
+                       and m["high_52w_proximity"] >= 0.95),
+            lambda m: f"at {m['high_52w_proximity']:.0%} of 52w high (George-Hwang)",
+            lambda m: m["high_52w_proximity"], True),
+        "factor_reversal": (
+            lambda m: m["reversal_1m"] is not None and m["reversal_1m"] > 5.0,
+            lambda m: f"1m selloff {m['reversal_1m']:.1f}% (Jegadeesh reversal)",
+            lambda m: m["reversal_1m"], True),
     }
 
 
