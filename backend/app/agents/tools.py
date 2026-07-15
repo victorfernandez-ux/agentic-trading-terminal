@@ -62,10 +62,40 @@ async def get_risk_tool(symbol: str, benchmark: str = "SPY",
 async def run_backtest_tool(symbol: str, strategy: str = "sma_cross",
                             params: dict | None = None, timeframe: str = "1D",
                             limit: int = 365) -> dict:
-    """Tool: backtest a strategy; returns return/trades/metrics (no equity curve)."""
+    """Tool: backtest a strategy; returns return/trades/metrics plus the
+    credibility layer (walk-forward holds/breaks, bootstrap bands,
+    benchmark excess) so debate evidence cites validated numbers."""
+    from app.analytics import validation
+
     bars = (await get_bars_tool(symbol, timeframe, limit)).get("bars", [])
+    ppy = _ppy(symbol)
     out = _run_backtest(bars, strategy=strategy, params=params,
-                        periods_per_year=_ppy(symbol))
+                        periods_per_year=ppy)
+    if not out.get("error"):
+        wf = validation.walk_forward(bars, strategy=strategy, params=params,
+                                     periods_per_year=ppy)
+        mc = validation.bootstrap_bands(out.get("trades", []))
+        # Compact evidence: verdicts and bands, not per-window detail.
+        out["validation"] = {
+            "walk_forward": ({k: wf[k] for k in
+                              ("holds", "one_regime", "positive_windows",
+                               "n_windows", "worst_window_pct")}
+                             if not wf.get("error") else wf),
+            "monte_carlo": (mc if mc.get("error") else
+                            {k: mc[k] for k in ("return_pct",
+                                                "max_drawdown_pct", "n_sims")}),
+        }
+        bench_symbol = validation.default_benchmark(symbol)
+        if bench_symbol:
+            try:  # benchmark is context, never fatal
+                bench_bars = (await get_bars_tool(bench_symbol, timeframe,
+                                                  limit)).get("bars", [])
+                out["benchmark"] = validation.benchmark_compare(
+                    out["equity_curve"], bench_bars, bench_symbol,
+                    periods_per_year=ppy)
+                out["benchmark"].pop("curve", None)  # compact agent context
+            except Exception:  # noqa: BLE001
+                pass
     out.pop("equity_curve", None)  # keep agent context compact
     out["trades"] = out.get("trades", [])[-5:]
     return {"symbol": symbol, **out}

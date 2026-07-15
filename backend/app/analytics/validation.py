@@ -142,6 +142,11 @@ def benchmark_compare(equity_curve: list[dict], bench_bars: list[dict],
     var = sum((a - mean_a) ** 2 for a in active) / len(active)
     std_a = math.sqrt(var)
     ir = (mean_a / std_a * math.sqrt(periods_per_year)) if std_a > 0 else 0.0
+    # Benchmark rebased to the strategy's starting equity, so the frontend
+    # can overlay both lines on one scale.
+    base_eq, base_px = common[0][1], common[0][2]
+    curve = [{"t": t, "equity": round(base_eq * px / base_px, 2)}
+             for t, _, px in common]
     return {
         "benchmark": benchmark,
         "bars_compared": len(common),
@@ -149,6 +154,7 @@ def benchmark_compare(equity_curve: list[dict], bench_bars: list[dict],
         "benchmark_return_pct": round(bench_ret, 2),
         "excess_return_pct": round(strat_ret - bench_ret, 2),
         "information_ratio": round(ir, 3),
+        "curve": curve,
     }
 
 
