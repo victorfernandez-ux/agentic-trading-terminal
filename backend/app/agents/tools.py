@@ -102,6 +102,19 @@ async def get_fear_greed_tool(market: str = "stocks") -> dict:
     return await fear_greed(market)
 
 
+async def create_hypothesis_tool(symbol: str, statement: str) -> dict:
+    """Tool: register a research hypothesis so runs/orders/outcome link up."""
+    from app.research import hypotheses
+    return hypotheses.create(symbol=symbol, statement=statement, source="agent")
+
+
+async def update_hypothesis_tool(hypothesis_id: str, status: str,
+                                 note: str | None = None) -> dict:
+    """Tool: set a hypothesis status (open|supported|refuted|expired)."""
+    from app.research import hypotheses
+    return hypotheses.update_status(hypothesis_id, status, note)
+
+
 async def get_option_chain_tool(symbol: str, expiration: int | None = None) -> dict:
     """Tool: compact option chain (8 strikes around ATM) as research evidence."""
     chain = await fetch_chain(symbol, expiration)
@@ -129,4 +142,6 @@ TOOLS = {
     "get_news": get_news_tool,
     "run_screener": run_screener_tool,
     "get_fear_greed": get_fear_greed_tool,
+    "create_hypothesis": create_hypothesis_tool,
+    "update_hypothesis": update_hypothesis_tool,
 }

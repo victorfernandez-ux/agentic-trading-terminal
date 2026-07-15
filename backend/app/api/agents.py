@@ -23,6 +23,9 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 class ResearchRequest(BaseModel):
     symbol: str
     question: str = "Should we take a position, and why?"
+    # Optional hypothesis-registry link (roadmap A2): ties the run and any
+    # resulting order to a hypothesis so its outcome stays traceable.
+    hypothesis_id: str | None = None
 
 
 @router.post("/research")
@@ -45,7 +48,8 @@ async def propose(req: ResearchRequest) -> dict:
     """
     try:
         return await run_propose(symbol=req.symbol, question=req.question,
-                                 source="agent")
+                                 source="agent",
+                                 hypothesis_id=req.hypothesis_id)
     except Exception as e:  # noqa: BLE001
         return {"symbol": req.symbol, "thesis": "", "direction": "none",
                 "proposed_action": None, "order": None, "order_id": None,

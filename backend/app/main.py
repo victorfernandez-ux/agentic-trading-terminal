@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
 from app.api import (agents, alerts, analytics, audit, health, market,
-                     orders, portfolios, stream)
+                     memory, orders, portfolios, research, stream)
 from app.config import settings
 from app.core import db
 from app.core.db import init_db
@@ -27,17 +27,23 @@ init_db()
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run the alert evaluator for the app's lifetime (single task,
-    Grafana-style scheduler — never one per connection)."""
+    """Run the alert evaluator (and, opt-in, the scan loop) for the app's
+    lifetime — single tasks, never one per connection."""
     from app.alerts.engine import evaluator_loop
 
-    task = asyncio.create_task(evaluator_loop(), name="alert-evaluator")
+    tasks = [asyncio.create_task(evaluator_loop(), name="alert-evaluator")]
+    if settings.scan_auto_research_enabled:
+        from app.research.scan_loop import scan_loop
+
+        tasks.append(asyncio.create_task(scan_loop(), name="scan-loop"))
     try:
         yield
     finally:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 app = FastAPI(
@@ -130,6 +136,8 @@ app.include_router(orders.router)
 app.include_router(portfolios.router)
 app.include_router(alerts.router)
 app.include_router(audit.router)
+app.include_router(memory.router)
+app.include_router(research.router)
 app.include_router(stream.router)
 
 

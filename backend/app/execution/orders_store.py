@@ -16,6 +16,7 @@ states; the API layer only maps those errors to HTTP codes.
 
 from __future__ import annotations
 
+import time
 import uuid
 
 from app.config import settings
@@ -123,10 +124,15 @@ async def approve(order_id: str) -> dict:
         except Exception:  # noqa: BLE001
             fill_price = None
     record["fill_price"] = fill_price
+    record["fill_ts"] = int(time.time() * 1000)
     record["broker_result"] = result
     record["mode"] = settings.trading_mode
     _save(order_id, record)
     audit_log("order.approved", record)
+    # Reflection memory (roadmap A1): if this fill flattened the position,
+    # persist the round trip's lesson. Never blocks or breaks the approval.
+    from app.memory import reflections
+    reflections.on_fill(record)
     return record
 
 

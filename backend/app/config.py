@@ -47,6 +47,17 @@ class Settings(BaseSettings):
     # Alert->research loop: max automatic agent runs per rolling hour across
     # all alerts. Proposals only -- the human approval gate is untouched.
     alert_auto_research_per_hour: int = 4
+    # Reflection memory: how many past-round-trip lessons per symbol are
+    # injected into the debate evidence. 0 disables injection.
+    reflections_limit: int = 5
+    # Scan->research loop: screener top hit feeds run_propose. The hourly
+    # cap is counted from the audit trail (crash-safe); the background
+    # schedule is opt-in — on-demand POST /research/scan/run always works.
+    scan_auto_research_per_hour: int = 2
+    scan_auto_research_enabled: bool = False
+    scan_interval_minutes: int = 60
+    scan_screen: str = "composite_bullish"
+    scan_universe: str = "sp100"
 
 
 settings = Settings()
