@@ -353,7 +353,10 @@ async def run_research(symbol: str, question: str) -> dict:
 
     audit_log("agent.run.start", {"run_id": run_id, "symbol": symbol, "question": question})
     state: AgentState = {"run_id": run_id, "symbol": symbol, "question": question}
-    result = await _GRAPH.ainvoke(state)
+    with llm.track_usage() as usage_entries:  # G1: tokens + cost per run
+        result = await _GRAPH.ainvoke(state)
+    llm_usage = llm.summarize_usage(usage_entries)
+    audit_log("agent.llm_usage", {"run_id": run_id, "symbol": symbol, **llm_usage})
     audit_log("agent.run.end", {"run_id": run_id, "symbol": symbol,
                                 "direction": result.get("direction", "none"),
                                 "has_order": result.get("order") is not None})
@@ -366,6 +369,7 @@ async def run_research(symbol: str, question: str) -> dict:
         "proposed_action": result.get("proposed_action"),
         "order": result.get("order"),
         "rationale": [r for r in result.get("rationale", []) if r],
+        "llm_usage": llm_usage,
     }
 
 async def run_propose(symbol: str, question: str, source: str = "agent",
@@ -414,6 +418,7 @@ def _stub_payload(run_id: str, symbol: str) -> dict:
         "proposed_action": None,
         "order": None,
         "rationale": ["LLM not configured -- returning deterministic stub."],
+        "llm_usage": None,
     }
 
 
@@ -463,7 +468,8 @@ def _node_summary(node: str, state: dict) -> str:
     return state.get("proposed_action") or "no action"
 
 
-def _final_payload(run_id: str, symbol: str, state: dict) -> dict:
+def _final_payload(run_id: str, symbol: str, state: dict,
+                   llm_usage: dict | None = None) -> dict:
     return {
         "run_id": run_id,
         "symbol": symbol,
@@ -473,6 +479,7 @@ def _final_payload(run_id: str, symbol: str, state: dict) -> dict:
         "proposed_action": state.get("proposed_action"),
         "order": state.get("order"),
         "rationale": [r for r in state.get("rationale", []) if r],
+        "llm_usage": llm_usage,
     }
 
 
@@ -498,18 +505,21 @@ async def run_research_stream(symbol: str, question: str):
     merged: dict = dict(state)
     yield {"event": "step", "node": "research", "status": "start",
            "label": _NODE_LABEL["research"], "run_id": run_id}
-    async for chunk in _GRAPH.astream(state):
-        for node, delta in chunk.items():
-            if node not in _NODE_ORDER:
-                continue
-            merged.update(delta or {})
-            yield {"event": "step", "node": node, "status": "end",
-                   "summary": _node_summary(node, merged), "run_id": run_id}
-            nxt = _NODE_ORDER.index(node) + 1
-            if nxt < len(_NODE_ORDER):
-                yield {"event": "step", "node": _NODE_ORDER[nxt], "status": "start",
-                       "label": _NODE_LABEL[_NODE_ORDER[nxt]], "run_id": run_id}
+    with llm.track_usage() as usage_entries:  # G1: tokens + cost per run
+        async for chunk in _GRAPH.astream(state):
+            for node, delta in chunk.items():
+                if node not in _NODE_ORDER:
+                    continue
+                merged.update(delta or {})
+                yield {"event": "step", "node": node, "status": "end",
+                       "summary": _node_summary(node, merged), "run_id": run_id}
+                nxt = _NODE_ORDER.index(node) + 1
+                if nxt < len(_NODE_ORDER):
+                    yield {"event": "step", "node": _NODE_ORDER[nxt], "status": "start",
+                           "label": _NODE_LABEL[_NODE_ORDER[nxt]], "run_id": run_id}
+    llm_usage = llm.summarize_usage(usage_entries)
+    audit_log("agent.llm_usage", {"run_id": run_id, "symbol": symbol, **llm_usage})
     audit_log("agent.run.end", {"run_id": run_id, "symbol": symbol,
                                 "direction": merged.get("direction", "none"),
                                 "has_order": merged.get("order") is not None})
-    yield {"event": "result", **_final_payload(run_id, symbol, merged)}
+    yield {"event": "result", **_final_payload(run_id, symbol, merged, llm_usage)}

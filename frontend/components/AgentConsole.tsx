@@ -21,6 +21,12 @@ type Result = {
   order: Record<string, unknown> | null;
   order_id: string | null;
   rationale: string[];
+  llm_usage?: {
+    calls: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    est_cost_usd: number | null;
+  } | null;
   error?: string;
 };
 
@@ -177,6 +183,16 @@ export default function AgentConsole({
                 <li key={i}>{r}</li>
               ))}
             </ul>
+          )}
+
+          {result.llm_usage && result.llm_usage.calls > 0 && (
+            <div style={{ marginTop: 8, fontSize: 10, color: "#5c6773" }}>
+              🧮 {result.llm_usage.calls} LLM calls ·{" "}
+              {(result.llm_usage.prompt_tokens + result.llm_usage.completion_tokens).toLocaleString()} tokens
+              {result.llm_usage.est_cost_usd != null
+                ? ` · ~$${result.llm_usage.est_cost_usd.toFixed(4)}`
+                : ""}
+            </div>
           )}
         </div>
       )}
