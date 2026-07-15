@@ -40,10 +40,11 @@ class Settings(BaseSettings):
     # "Authorization: Bearer <token>"; ?token=<token> is accepted too for
     # clients that can't set headers (WS, SSE EventSource).
     api_token: str | None = None
-    # Comma-separated browser origins allowed by CORS. Only matters when a
-    # frontend is served from a different origin than this API (the Next
-    # rewrite proxy keeps everything same-origin in the default setup).
-    cors_origins: str = "http://localhost:3000"
+    # Comma-separated browser origins allowed by CORS and by the CSRF
+    # write guard. Both loopback spellings are included — a browser on
+    # 127.0.0.1:3000 sends that exact Origin, and treating it as foreign
+    # would 403 every UI write (found in live verification).
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     # Alert->research loop: max automatic agent runs per rolling hour across
     # all alerts. Proposals only -- the human approval gate is untouched.
     alert_auto_research_per_hour: int = 4

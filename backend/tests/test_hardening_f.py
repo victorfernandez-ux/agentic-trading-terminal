@@ -40,6 +40,16 @@ def test_same_origin_post_passes_csrf():
     assert r.status_code != 403
 
 
+def test_loopback_alias_origin_passes_csrf():
+    """127.0.0.1:3000 is the same dev frontend as localhost:3000 — the
+    guard must not 403 it (regression: found rejecting real UI writes)."""
+    r = client.post("/orders/propose",
+                    json={"symbol": "CSRF5", "side": "buy", "qty": 1,
+                          "order_type": "market"},
+                    headers={"Origin": "http://127.0.0.1:3000"})
+    assert r.status_code == 200
+
+
 def test_no_origin_api_client_passes():
     r = client.post("/orders/propose",
                     json={"symbol": "CSRF4", "side": "buy", "qty": 1,
