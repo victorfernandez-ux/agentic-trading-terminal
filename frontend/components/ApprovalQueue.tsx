@@ -12,6 +12,9 @@ type Order = {
   status: string;
   est_notional?: number;
   est_price?: number;
+  created_ts?: number;
+  thesis?: string | null;
+  run_id?: string;
   source?: string;
   broker_result?: { status?: string; broker?: string };
 };
@@ -21,6 +24,17 @@ const STATUS_COLOR: Record<string, string> = {
   SUBMITTED: "#8fd694",
   REJECTED: "#f7768e",
 };
+
+/** "proposed 3m ago" — an est_price snapshot ages fast in a moving market. */
+function age(ts?: number): string | null {
+  if (!ts) return null;
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+}
 
 export default function ApprovalQueue({
   refreshKey,
@@ -33,27 +47,63 @@ export default function ApprovalQueue({
 }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  // Approve is money-shaped: first click arms, second click fires (H2d).
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loadErr, setLoadErr] = useState(false);
 
   // "default" keeps the unfiltered view (legacy orders may predate
   // portfolio stamping); any other portfolio filters server-side.
   const load = useCallback(() => {
     const qs = portfolio !== "default" ? `?portfolio_id=${encodeURIComponent(portfolio)}` : "";
     apiFetch(`/api/orders${qs}`)
-      .then((r) => r.json())
-      .then(setOrders)
-      .catch(() => setOrders([]));
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data: Order[]) => {
+        setOrders(data);
+        setLoadErr(false);
+      })
+      // Keep the last-known queue on a transient failure — polling
+      // recovers; blanking it would misread as "no orders".
+      .catch(() => setLoadErr(true));
   }, [portfolio]);
 
+  // Poll (H2b): orders resolved elsewhere (Telegram, MCP, another tab)
+  // must disappear here — a stale card invites approving a resolved order.
   useEffect(() => {
     load();
+    const t = setInterval(load, 10_000);
+    return () => clearInterval(t);
   }, [load, refreshKey]);
 
   async function act(id: string, action: "approve" | "reject") {
     setBusy(id);
+    setConfirming(null);
     try {
-      await apiFetch(`/api/orders/${id}/${action}`, { method: "POST" });
+      const r = await apiFetch(`/api/orders/${id}/${action}`, { method: "POST" });
+      if (r.ok) {
+        setErrors(({ [id]: _cleared, ...rest }) => rest);
+      } else {
+        // Fail loud (H2a): a 409/500 is not a success. Surface the server's
+        // message on the card; the reload below shows the order's real state.
+        let msg = `${action} failed (HTTP ${r.status})`;
+        try {
+          const j = await r.json();
+          if (typeof j?.error?.message === "string") msg = `${action} failed: ${j.error.message}`;
+        } catch {
+          /* keep the status-code message */
+        }
+        setErrors((e) => ({ ...e, [id]: msg }));
+      }
       load();
       onChange?.(); // refresh positions after a fill
+    } catch {
+      setErrors((e) => ({
+        ...e,
+        [id]: `${action} failed: network error — the order was NOT ${action === "approve" ? "approved" : "rejected"}`,
+      }));
     } finally {
       setBusy(null);
     }
@@ -62,13 +112,20 @@ export default function ApprovalQueue({
   if (!orders.length) {
     return (
       <p style={{ fontSize: 12, color: "#5c6773" }}>
-        No orders yet. Run the agents — proposed trades land here for your approval.
+        {loadErr
+          ? "Order queue unavailable — retrying…"
+          : "No orders yet. Run the agents — proposed trades land here for your approval."}
       </p>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {loadErr && (
+        <p style={{ fontSize: 11, color: "#e0af68", margin: 0 }}>
+          Queue refresh failed — showing last known state, retrying…
+        </p>
+      )}
       {orders.map((o) => (
         <div key={o.id} className="card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 12 }}>
@@ -85,18 +142,44 @@ export default function ApprovalQueue({
           </div>
           <div style={{ fontSize: 10, color: "#5c6773", margin: "4px 0 6px" }}>
             {o.id} · {o.order_type} · {o.source ?? "human"}
+            {o.est_price ? ` · est $${o.est_price}` : ""}
+            {age(o.created_ts) ? ` · proposed ${age(o.created_ts)}` : ""}
             {o.broker_result?.status ? ` · ${o.broker_result.status}` : ""}
           </div>
-          {o.status === "PENDING_APPROVAL" && (
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => act(o.id, "approve")} disabled={busy === o.id} className="btn btn-ok">
-                Approve
-              </button>
-              <button onClick={() => act(o.id, "reject")} disabled={busy === o.id} className="btn btn-danger">
-                Reject
-              </button>
+          {o.thesis ? (
+            <div style={{ fontSize: 11, color: "#9aa5b1", margin: "0 0 6px", fontStyle: "italic" }}>
+              {o.thesis}
             </div>
-          )}
+          ) : null}
+          {errors[o.id] ? (
+            <div role="alert" style={{ fontSize: 11, color: "#f7768e", margin: "0 0 6px" }}>
+              {errors[o.id]}
+            </div>
+          ) : null}
+          {o.status === "PENDING_APPROVAL" &&
+            (confirming === o.id ? (
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, color: "#e0af68" }}>
+                  Confirm {o.side.toUpperCase()} {o.qty} {o.symbol}
+                  {o.est_notional ? ` (~$${o.est_notional})` : ""}?
+                </span>
+                <button onClick={() => act(o.id, "approve")} disabled={busy === o.id} className="btn btn-ok">
+                  Confirm
+                </button>
+                <button onClick={() => setConfirming(null)} disabled={busy === o.id} className="btn">
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => setConfirming(o.id)} disabled={busy === o.id} className="btn btn-ok">
+                  Approve
+                </button>
+                <button onClick={() => act(o.id, "reject")} disabled={busy === o.id} className="btn btn-danger">
+                  Reject
+                </button>
+              </div>
+            ))}
         </div>
       ))}
     </div>

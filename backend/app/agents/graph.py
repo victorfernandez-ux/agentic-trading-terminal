@@ -158,6 +158,10 @@ def _build_order(state: AgentState) -> dict | None:
         "est_notional": est_notional,
         "risk_pct": risk_pct,
         "run_id": state.get("run_id"),
+        # Why this order exists (H2c): the judge's thesis rides along so the
+        # approver sees the rationale on the order card, not just in the
+        # AgentConsole scrollback. Truncated — it's a summary, not the run.
+        "thesis": (state.get("thesis") or "").strip()[:280] or None,
     }
 
 

@@ -46,6 +46,9 @@ def create_pending(order: dict) -> dict:
     """Create an order in PENDING_APPROVAL state. No broker contact."""
     record = {**order, "id": _new_id(), "status": "PENDING_APPROVAL"}
     record.setdefault("portfolio_id", DEFAULT_PORTFOLIO_ID)
+    # Proposal timestamp (H2c): lets the approver see how stale a pending
+    # order is — an est_price snapshot ages fast in a moving market.
+    record.setdefault("created_ts", int(time.time() * 1000))
     with session_scope() as s:
         s.add(OrderRow(id=record["id"], status=record["status"],
                        symbol=record.get("symbol"),
