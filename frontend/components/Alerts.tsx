@@ -6,21 +6,10 @@
  * the quote socket and via polling here. Alerts notify — they never trade.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { apiFetch } from "@/lib/api";
-
-type Alert = {
-  id: string;
-  status: "active" | "paused" | "fired";
-  symbol: string;
-  metric: string;
-  op: string;
-  value: number;
-  trigger: string;
-  auto_research?: boolean;
-  fired_count: number;
-  last_state: { side: string; value: number } | null;
-};
+import type { AlertRule } from "@/lib/types";
+import { usePolledFetch } from "@/lib/usePolledFetch";
 
 const dim = "#5c6773";
 const METRIC_LABEL: Record<string, string> = {
@@ -37,7 +26,6 @@ const OP_LABEL: Record<string, string> = {
 };
 
 export default function Alerts({ symbol }: { symbol: string }) {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [metric, setMetric] = useState("price");
   const [op, setOp] = useState("crosses_above");
   const [value, setValue] = useState<string>("");
@@ -45,21 +33,11 @@ export default function Alerts({ symbol }: { symbol: string }) {
   const [autoResearch, setAutoResearch] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const r = await apiFetch("/api/alerts");
-      const j = await r.json();
-      setAlerts(j.alerts ?? []);
-    } catch {
-      /* backend offline — list stays stale */
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 10_000);
-    return () => clearInterval(t);
-  }, [load]);
+  // Backend offline -> the hook keeps the stale list (same as before).
+  const { data, reload: load } = usePolledFetch<AlertRule[]>("/api/alerts", 10_000, {
+    parse: (j) => (j as { alerts?: AlertRule[] }).alerts ?? [],
+  });
+  const alerts = data ?? [];
 
   async function create() {
     setErr(null);

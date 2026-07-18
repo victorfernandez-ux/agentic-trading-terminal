@@ -7,16 +7,9 @@
  * trades. Refreshes every 5 minutes; the backend caches for 10.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
-
-type FG = {
-  market: string;
-  value?: number;
-  label?: string;
-  source?: string;
-  error?: string;
-};
+import { useState } from "react";
+import type { FearGreedReading as FG } from "@/lib/types";
+import { usePolledFetch } from "@/lib/usePolledFetch";
 
 // Five sentiment bands, drawn left→right across the dial.
 const BANDS = [
@@ -104,30 +97,18 @@ function Dial({ data }: { data: FG | null }) {
   );
 }
 
+function useFearGreed(market: "stocks" | "crypto"): FG | null {
+  const { data, error } = usePolledFetch<FG>(
+    `/api/analytics/sentiment/fear-greed?market=${market}`,
+    300_000,
+  );
+  return data ?? (error ? { market, error: "offline" } : null);
+}
+
 export default function FearGreed() {
-  const [stocks, setStocks] = useState<FG | null>(null);
-  const [crypto, setCrypto] = useState<FG | null>(null);
   const [market, setMarket] = useState<"stocks" | "crypto">("stocks");
-
-  const load = useCallback(async () => {
-    const get = async (m: string): Promise<FG> => {
-      try {
-        const r = await apiFetch(`/api/analytics/sentiment/fear-greed?market=${m}`);
-        return await r.json();
-      } catch {
-        return { market: m, error: "offline" };
-      }
-    };
-    const [s, c] = await Promise.all([get("stocks"), get("crypto")]);
-    setStocks(s);
-    setCrypto(c);
-  }, []);
-
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 300_000);
-    return () => clearInterval(t);
-  }, [load]);
+  const stocks = useFearGreed("stocks");
+  const crypto = useFearGreed("crypto");
 
   const active = market === "stocks" ? stocks : crypto;
 

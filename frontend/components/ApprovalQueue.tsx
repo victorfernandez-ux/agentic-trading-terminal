@@ -1,23 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
-
-type Order = {
-  id: string;
-  symbol: string;
-  side: string;
-  qty: number;
-  order_type: string;
-  status: string;
-  est_notional?: number;
-  est_price?: number;
-  created_ts?: number;
-  thesis?: string | null;
-  run_id?: string;
-  source?: string;
-  broker_result?: { status?: string; broker?: string };
-};
+import { useState } from "react";
+import { apiFetch, portfolioQuery } from "@/lib/api";
+import type { Order } from "@/lib/types";
+import { usePolledFetch } from "@/lib/usePolledFetch";
 
 const STATUS_COLOR: Record<string, string> = {
   PENDING_APPROVAL: "#e0af68",
@@ -45,38 +31,23 @@ export default function ApprovalQueue({
   onChange?: () => void;
   portfolio?: string;
 }) {
-  const [orders, setOrders] = useState<Order[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   // Approve is money-shaped: first click arms, second click fires (H2d).
   const [confirming, setConfirming] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [loadErr, setLoadErr] = useState(false);
-
-  // "default" keeps the unfiltered view (legacy orders may predate
-  // portfolio stamping); any other portfolio filters server-side.
-  const load = useCallback(() => {
-    const qs = portfolio !== "default" ? `?portfolio_id=${encodeURIComponent(portfolio)}` : "";
-    apiFetch(`/api/orders${qs}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data: Order[]) => {
-        setOrders(data);
-        setLoadErr(false);
-      })
-      // Keep the last-known queue on a transient failure — polling
-      // recovers; blanking it would misread as "no orders".
-      .catch(() => setLoadErr(true));
-  }, [portfolio]);
 
   // Poll (H2b): orders resolved elsewhere (Telegram, MCP, another tab)
   // must disappear here — a stale card invites approving a resolved order.
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 10_000);
-    return () => clearInterval(t);
-  }, [load, refreshKey]);
+  // The hook keeps last-known data on a transient failure (`error` banner)
+  // instead of blanking to "No orders".
+  const {
+    data,
+    error: loadErr,
+    reload: load,
+  } = usePolledFetch<Order[]>(`/api/orders${portfolioQuery(portfolio)}`, 10_000, {
+    refreshKey,
+  });
+  const orders = data ?? [];
 
   async function act(id: string, action: "approve" | "reject") {
     setBusy(id);

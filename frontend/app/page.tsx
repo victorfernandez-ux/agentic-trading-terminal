@@ -15,8 +15,7 @@ import MobileNav, { type MobileTab } from "@/components/MobileNav";
 import PortfolioSwitcher from "@/components/PortfolioSwitcher";
 import useIsMobile from "@/lib/useIsMobile";
 import { apiFetch, getToken, setToken, UNAUTHORIZED_EVENT } from "@/lib/api";
-
-type Health = { status: string; trading_mode: string; require_human_approval: boolean };
+import type { Health } from "@/lib/types";
 
 const DEFAULT_WATCH = ["BTC/USD", "ETH/USD", "SOL/USD", "AAPL", "NVDA", "SPY"];
 const WATCH_KEY = "att.watchlist.v1";

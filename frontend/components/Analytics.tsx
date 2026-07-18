@@ -22,6 +22,54 @@ const blue = "#7aa2f7";
 
 const cell: React.CSSProperties = { padding: "2px 8px 2px 0", whiteSpace: "nowrap" };
 
+// View types for the rows each tab renders (H3): only the fields the JSX
+// below actually reads. Full per-endpoint payload types land with the
+// planned per-tab split (hardening roadmap H7).
+type ScreenMatch = {
+  symbol: string;
+  price?: number | null;
+  day_pct?: number | null;
+  rsi14?: number | null;
+  rvol?: number | null;
+  pct_of_52w_high?: number | null;
+  signal_score: number;
+  matched?: string[];
+};
+type SignalVote = { factor: string; vote: number; detail: string };
+type OptionRow = {
+  strike: number;
+  bid?: number | null;
+  ask?: number | null;
+  iv?: number | null;
+  delta?: number | null;
+  oi?: number | null;
+  itm?: boolean;
+};
+type PersonaScore = { persona: string; score: number; verdict: string };
+type BacktestTrade = {
+  entry_t: number;
+  entry_price: number;
+  exit_t: number;
+  exit_price: number;
+  pnl_pct: number;
+};
+type WalkForward = {
+  error?: string;
+  holds?: boolean;
+  one_regime?: boolean;
+  positive_windows?: number;
+  n_windows?: number;
+  worst_window_pct?: number;
+};
+type BootstrapBand = { p5?: number; p50?: number; p95?: number };
+type BenchmarkPanel = {
+  error?: string;
+  benchmark?: string;
+  excess_return_pct?: number;
+  information_ratio?: number;
+  curve?: { t: number; equity: number }[];
+};
+
 function Num({ v, suffix = "", colorize = false }: { v: number | null | undefined; suffix?: string; colorize?: boolean }) {
   if (v === null || v === undefined) return <span style={{ color: dim }}>—</span>;
   const color = colorize ? (v >= 0 ? green : red) : undefined;
@@ -131,6 +179,10 @@ export default function Analytics({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, symbol, expiration]);
 
+  // Single untyped seam: nine endpoint payloads share this one state slot,
+  // so per-field types live on the render helpers below instead. Goes away
+  // with the per-tab split (hardening roadmap H7).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = (data ?? {}) as Record<string, any>;
 
   return (
@@ -226,7 +278,7 @@ export default function Analytics({
             </tr>
           </thead>
           <tbody style={{ textAlign: "right" }}>
-            {d.matches.map((m: any) => (
+            {d.matches.map((m: ScreenMatch) => (
               <tr
                 key={m.symbol}
                 onClick={() => onSelect?.(m.symbol)}
@@ -321,7 +373,7 @@ export default function Analytics({
             ]}
           />
           <ul style={{ margin: 0, paddingLeft: 16, color: dim, maxWidth: 420 }}>
-            {(d.signal.votes ?? []).map((v: any) => (
+            {(d.signal.votes ?? []).map((v: SignalVote) => (
               <li key={v.factor} style={{ color: v.vote > 0 ? green : v.vote < 0 ? red : dim }}>{v.detail}</li>
             ))}
           </ul>
@@ -421,10 +473,11 @@ export default function Analytics({
               </tr>
             </thead>
             <tbody style={{ textAlign: "right" }}>
-              {(d.calls ?? []).map((c: any, i: number) => {
-                const p = (d.puts ?? []).find((x: any) => x.strike === c.strike) ?? {};
+              {(d.calls ?? []).map((c: OptionRow, i: number) => {
+                const p: Partial<OptionRow> =
+                  (d.puts ?? []).find((x: OptionRow) => x.strike === c.strike) ?? {};
                 const atm = Math.abs(c.strike - d.spot) ===
-                  Math.min(...(d.calls ?? []).map((x: any) => Math.abs(x.strike - d.spot)));
+                  Math.min(...(d.calls ?? []).map((x: OptionRow) => Math.abs(x.strike - d.spot)));
                 return (
                   <tr key={i} className="tr-hover num" style={{ background: atm ? "#16203a" : undefined }}>
                     <td style={{ ...cell, color: c.itm ? green : undefined }}>
@@ -457,7 +510,7 @@ export default function Analytics({
             </b>{" "}
             {d.consensus.score !== null && <span style={{ color: dim }}>(score {d.consensus.score}, {d.consensus.personas_scored}/5 personas opined)</span>}
           </p>
-          {(d.personas ?? []).map((p: any) => (
+          {(d.personas ?? []).map((p: PersonaScore) => (
             <div key={p.persona} style={{ display: "grid", gridTemplateColumns: "130px 1fr 60px 110px", gap: 8, alignItems: "center", padding: "3px 0" }}>
               <span>{p.persona}</span>
               <div style={{ background: "#1c2330", borderRadius: 4, height: 8 }}>
@@ -490,8 +543,11 @@ function Validation({
   benchmark,
   runCard,
 }: {
-  validation?: Record<string, any>;
-  benchmark?: Record<string, any>;
+  validation?: {
+    walk_forward?: WalkForward;
+    monte_carlo?: { error?: string; return_pct?: BootstrapBand };
+  };
+  benchmark?: BenchmarkPanel;
   runCard?: { id: string };
 }) {
   const wf = validation?.walk_forward;
@@ -630,7 +686,7 @@ function CorrHeatmap({
   );
 }
 
-function TradeList({ trades }: { trades: any[] }) {
+function TradeList({ trades }: { trades: BacktestTrade[] }) {
   if (!trades?.length) return null;
   const fmt = (t: number) => new Date(t).toISOString().slice(0, 10);
   return (

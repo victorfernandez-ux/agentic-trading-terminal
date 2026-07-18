@@ -1,17 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
-
-type Position = {
-  symbol: string;
-  qty: number;
-  avg_cost: number;
-  last: number | null;
-  market_value: number | null;
-  unrealized_pnl: number | null;
-  unrealized_pnl_pct: number | null;
-};
+import type { Position } from "@/lib/types";
+import { portfolioQuery } from "@/lib/api";
+import { usePolledFetch } from "@/lib/usePolledFetch";
 
 export default function Positions({
   refreshKey,
@@ -20,24 +11,13 @@ export default function Positions({
   refreshKey: number;
   portfolio?: string;
 }) {
-  const [rows, setRows] = useState<Position[]>([]);
-
-  // "default" keeps the unfiltered view (legacy orders may predate
-  // portfolio stamping); any other portfolio filters server-side.
-  const load = useCallback(() => {
-    const qs = portfolio !== "default" ? `?portfolio_id=${encodeURIComponent(portfolio)}` : "";
-    apiFetch(`/api/orders/positions/all${qs}`)
-      .then((r) => r.json())
-      .then((d) => setRows(Array.isArray(d) ? d : []))
-      .catch(() => setRows([]));
-  }, [portfolio]);
-
   // Reload on approval (refreshKey) and poll every 15s for live P&L.
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 15000);
-    return () => clearInterval(t);
-  }, [load, refreshKey]);
+  const { data } = usePolledFetch<Position[]>(
+    `/api/orders/positions/all${portfolioQuery(portfolio)}`,
+    15000,
+    { refreshKey, parse: (d) => (Array.isArray(d) ? (d as Position[]) : []) },
+  );
+  const rows = data ?? [];
 
   if (!rows.length) {
     return (

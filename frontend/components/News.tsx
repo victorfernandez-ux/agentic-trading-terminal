@@ -5,10 +5,8 @@
  * research agent reads as evidence — what the human sees is what the agent saw.
  */
 
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
-
-type Item = { title: string; link: string; source: string; published_ts: number | null };
+import type { NewsItem } from "@/lib/types";
+import { usePolledFetch } from "@/lib/usePolledFetch";
 
 function ago(ts: number | null): string {
   if (!ts) return "";
@@ -18,34 +16,27 @@ function ago(ts: number | null): string {
   return h < 48 ? `${h}h` : `${Math.round(h / 24)}d`;
 }
 
-export default function News({ symbol }: { symbol: string }) {
-  const [items, setItems] = useState<Item[]>([]);
-  const [err, setErr] = useState<string | null>(null);
+type NewsPayload = { items: NewsItem[]; err: string | null };
 
-  useEffect(() => {
-    let dead = false;
-    const load = async () => {
-      try {
-        const r = await apiFetch(`/api/market/news?symbol=${encodeURIComponent(symbol)}&limit=12`);
-        const j = await r.json();
-        if (!dead) {
-          setItems(j.items ?? []);
-          // j.error is a string from /market/news, but a {code, message}
-          // envelope on auth/HTTP errors — never render an object as JSX.
-          setErr(typeof j.error === "string" ? j.error : j.error ? "unavailable" : null);
-        }
-      } catch {
-        if (!dead) setErr("news unavailable");
-      }
-    };
-    setItems([]);
-    load();
-    const t = setInterval(load, 5 * 60_000);
-    return () => {
-      dead = true;
-      clearInterval(t);
-    };
-  }, [symbol]);
+export default function News({ symbol }: { symbol: string }) {
+  const { data, error: fetchErr } = usePolledFetch<NewsPayload>(
+    `/api/market/news?symbol=${encodeURIComponent(symbol)}&limit=12`,
+    5 * 60_000,
+    {
+      resetOnUrlChange: true,
+      parse: (raw) => {
+        const j = raw as { items?: NewsItem[]; error?: unknown };
+        // j.error is a string from /market/news, but a {code, message}
+        // envelope on auth/HTTP errors — never render an object as JSX.
+        return {
+          items: j.items ?? [],
+          err: typeof j.error === "string" ? j.error : j.error ? "unavailable" : null,
+        };
+      },
+    },
+  );
+  const items = data?.items ?? [];
+  const err = data?.err ?? (fetchErr ? "news unavailable" : null);
 
   if (err && !items.length)
     return <p style={{ fontSize: 12, color: "#5c6773" }}>no headlines — {err}</p>;

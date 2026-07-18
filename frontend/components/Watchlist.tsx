@@ -3,13 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, ticketed } from "@/lib/api";
 
-export type Quote = {
-  symbol: string;
-  price: number | null;
-  pct_change: number | null;
-  provider?: string;
-  error?: string;
-};
+export type { Quote } from "@/lib/types";
+import type { Quote } from "@/lib/types";
 
 type Props = {
   symbols: string[];
