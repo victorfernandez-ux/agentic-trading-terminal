@@ -42,3 +42,4 @@ terminal.db
 
 # Browser-automation artifacts (may contain personal data)
 .playwright-mcp/
+.gstack/
