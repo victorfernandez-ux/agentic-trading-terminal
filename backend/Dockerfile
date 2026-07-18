@@ -24,4 +24,8 @@ ENV PYTHONUNBUFFERED=1 \
     KILL_SWITCH_FILE=/data/KILL_SWITCH
 USER att
 EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Migrations run first (H4d): Alembic is the schema source of truth for
+# non-SQLite databases — app startup refuses a Postgres DB with no schema.
+# (Against the default SQLite DATABASE_URL, alembic upgrade is a no-op-safe
+# bootstrap of the same schema.)
+CMD ["sh", "-c", "python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]

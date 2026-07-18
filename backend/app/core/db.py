@@ -198,8 +198,20 @@ def _ensure_schema_upgrades(eng) -> None:
 
 
 def init_db() -> None:
-    _ensure_schema_upgrades(engine)
-    Base.metadata.create_all(engine)
+    # Schema source of truth (H4d): SQLite (zero-setup dev/tests) keeps the
+    # create_all + additive-upgrade path. Anything else (Postgres deploys)
+    # gets its schema from Alembic ONLY — the docker entrypoint runs
+    # `alembic upgrade head` before uvicorn. create_all against Postgres
+    # would fork a second, silently-diverging schema history.
+    if engine.url.get_backend_name() == "sqlite":
+        _ensure_schema_upgrades(engine)
+        Base.metadata.create_all(engine)
+    else:
+        from sqlalchemy import inspect
+        if "orders" not in inspect(engine).get_table_names():
+            raise RuntimeError(
+                "database schema missing — run `alembic upgrade head` "
+                "against this database before starting the app")
     # Idempotently seed the default portfolio so single-portfolio behavior
     # is preserved without any client knowing portfolios exist.
     import time
