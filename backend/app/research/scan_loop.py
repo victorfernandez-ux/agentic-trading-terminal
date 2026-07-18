@@ -17,11 +17,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
 
 from app.config import settings
 from app.core.audit import audit_log
-from app.core.db import AuditRow, session_scope
 from app.research import hypotheses
 
 log = logging.getLogger("scan")
@@ -31,12 +29,9 @@ _START_EVENT = "scan.auto_research.start"
 
 def _cap_ok() -> bool:
     """Sliding-window cap from the audit trail (survives restarts)."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-    with session_scope() as s:
-        n = (s.query(AuditRow)
-             .filter(AuditRow.event == _START_EVENT, AuditRow.ts >= cutoff)
-             .count())
-    return n < settings.scan_auto_research_per_hour
+    from app.core.audit import count_recent
+
+    return count_recent(_START_EVENT, 3600) < settings.scan_auto_research_per_hour
 
 
 def _find_or_create_hypothesis(symbol: str, statement: str) -> dict:

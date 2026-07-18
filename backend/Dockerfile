@@ -18,14 +18,16 @@ COPY app ./app
 COPY migrations ./migrations
 COPY alembic.ini ./
 ENV PYTHONUNBUFFERED=1 \
+    # The shipped container is a deploy artifact: arm the production
+    # guards (no silent SQLite fallback on a Postgres outage, H1b).
+    APP_ENV=production \
     # All mutable state lives on the /data volume (read-only rootfs):
     DATABASE_URL=sqlite:////data/terminal.db \
     RUNS_DIR=/data/runs \
     KILL_SWITCH_FILE=/data/KILL_SWITCH
 USER att
 EXPOSE 8000
-# Migrations run first (H4d): Alembic is the schema source of truth for
-# non-SQLite databases — app startup refuses a Postgres DB with no schema.
-# (Against the default SQLite DATABASE_URL, alembic upgrade is a no-op-safe
-# bootstrap of the same schema.)
-CMD ["sh", "-c", "python -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# Schema bootstrap first (H4d): app.core.migrate skips SQLite (init_db owns
+# it), stamps legacy create_all Postgres schemas, then alembic-upgrades.
+# `exec` hands PID signals to uvicorn so docker stop runs a clean shutdown.
+CMD ["sh", "-c", "python -m app.core.migrate && exec python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"]

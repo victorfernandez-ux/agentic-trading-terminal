@@ -102,7 +102,11 @@ function useFearGreed(market: "stocks" | "crypto"): FG | null {
     `/api/analytics/sentiment/fear-greed?market=${market}`,
     300_000,
   );
-  return data ?? (error ? { market, error: "offline" } : null);
+  // error WINS over kept data: a pre-outage sentiment reading shown as
+  // current is worse than "unavailable" (review finding — the old code
+  // degraded the dial on every failed refresh; preserve that).
+  if (error) return { market, error: "offline" };
+  return data;
 }
 
 /** embedded=true (desktop): renders inside the Watchlist panel with its own

@@ -22,11 +22,13 @@ logger = logging.getLogger("audit")
 
 
 def _wal_path() -> str:
-    # Lazy (not module-level): tests and deploys point RUNS_DIR/.private at
+    # Lazy (not module-level): tests and deploys point RUNS_DIR at
     # different places; resolve at write time from the ambient settings.
+    # Anchored INSIDE runs_dir — the one directory every deploy already
+    # guarantees writable (run cards live there; Docker mounts /data/runs).
     from app.config import settings
-    return settings.audit_wal_file or os.path.join(
-        os.path.dirname(settings.runs_dir) or ".private", "audit-wal.jsonl")
+    return settings.audit_wal_file or os.path.join(settings.runs_dir,
+                                                   "audit-wal.jsonl")
 
 
 def _wal_append(record: dict) -> None:
@@ -35,6 +37,24 @@ def _wal_append(record: dict) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, default=str) + "\n")
+
+
+def count_recent(event: str, window_s: float) -> int:
+    """Count audit rows for `event` in the last `window_s` seconds.
+
+    Shared by the sliding-window rate caps (alert auto-research, scan
+    loop) so the query lives in exactly one place. Raises on DB failure —
+    callers decide their own fallback.
+    """
+    from datetime import timedelta
+
+    from app.core.db import AuditRow, session_scope
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=window_s)).isoformat()
+    with session_scope() as s:
+        return (s.query(AuditRow)
+                .filter(AuditRow.event == event, AuditRow.ts >= cutoff)
+                .count())
 
 
 def audit_log(event: str, payload: dict) -> None:

@@ -39,7 +39,7 @@ def build_order(state: "AgentState") -> dict | None:
     price = quote.get("price")
     if not price:
         return None
-    risk_pct = state.get("risk", {}).get("suggested_risk_pct") or 1.0
+    risk_pct = (state.get("risk") or {}).get("suggested_risk_pct") or 1.0
     try:
         risk_pct = max(0.25, min(float(risk_pct), 2.0))
     except (TypeError, ValueError):

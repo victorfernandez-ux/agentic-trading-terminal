@@ -125,6 +125,8 @@ async def test_cap_window_slides(proposals, monkeypatch):
             AuditRow.event == "alert.auto_research.start").update(
             {"ts": old}, synchronize_session=False)
         s.commit()
+    # the in-process deque ages with real time; simulate it aging too
+    engine._AUTO_RUNS.clear()
     store.update(store.list_alerts()[0]["id"], {"last_fired_ts": None})
     await _fire_pass(monkeypatch, price=160.0)
     assert len(proposals) == 2

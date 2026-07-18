@@ -5,16 +5,11 @@
  * research agent reads as evidence — what the human sees is what the agent saw.
  */
 
+import { timeAgo } from "@/lib/format";
 import type { NewsItem } from "@/lib/types";
 import { usePolledFetch } from "@/lib/usePolledFetch";
 
-function ago(ts: number | null): string {
-  if (!ts) return "";
-  const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
-  if (m < 60) return `${m}m`;
-  const h = Math.round(m / 60);
-  return h < 48 ? `${h}h` : `${Math.round(h / 24)}d`;
-}
+const ago = (ts: number | null): string => timeAgo(ts) ?? "";
 
 type NewsPayload = { items: NewsItem[]; err: string | null };
 

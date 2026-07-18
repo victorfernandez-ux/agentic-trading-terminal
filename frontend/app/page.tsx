@@ -14,8 +14,9 @@ import FearGreed from "@/components/FearGreed";
 import MobileNav, { type MobileTab } from "@/components/MobileNav";
 import PortfolioSwitcher from "@/components/PortfolioSwitcher";
 import useIsMobile from "@/lib/useIsMobile";
-import { apiFetch, getToken, setToken, UNAUTHORIZED_EVENT } from "@/lib/api";
+import { getToken, setToken, UNAUTHORIZED_EVENT } from "@/lib/api";
 import type { Health } from "@/lib/types";
+import { usePolledFetch } from "@/lib/usePolledFetch";
 
 const DEFAULT_WATCH = ["BTC/USD", "ETH/USD", "SOL/USD", "AAPL", "NVDA", "SPY"];
 const WATCH_KEY = "att.watchlist.v1";
@@ -23,8 +24,10 @@ const WATCH_KEY = "att.watchlist.v1";
 export default function Terminal() {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState<MobileTab>("markets");
-  const [health, setHealth] = useState<Health | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  // Health line via the shared hook (review: this was the last hand-rolled
+  // fetch after the H3 refactor). One-shot; non-OK/network → error flag.
+  const { data: health, error: healthErr } = usePolledFetch<Health>("/api/health", 0);
+  const err = healthErr ? "backend offline — start uvicorn on :8000" : null;
   const [symbol, setSymbol] = useState("BTC/USD");
   const [refreshKey, setRefreshKey] = useState(0);
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
@@ -56,13 +59,6 @@ export default function Terminal() {
     persist(list.length ? list : DEFAULT_WATCH);
     if (symbol === s) setSymbol((list.length ? list : DEFAULT_WATCH)[0]);
   };
-
-  useEffect(() => {
-    apiFetch("/api/health")
-      .then((r) => r.json())
-      .then(setHealth)
-      .catch(() => setErr("backend offline — start uvicorn on :8000"));
-  }, []);
 
   // Token gate: any component's apiFetch hitting a 401 (backend has
   // API_TOKEN set) raises this event; we show an unlock input in the header.

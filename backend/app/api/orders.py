@@ -32,7 +32,7 @@ class OrderProposal(BaseModel):
     # human proposals it's optional but feeds the fill price and the
     # behavior profile's rejection counterfactuals (D1) — without it a
     # rejected manual order can never be scored.
-    est_price: float | None = None
+    est_price: float | None = Field(default=None, gt=0)
     source: str = "human"  # agent | human
     portfolio_id: str = portfolios.DEFAULT_PORTFOLIO_ID
 

@@ -25,6 +25,10 @@ from app.core.db import DEFAULT_PORTFOLIO_ID, OrderRow, session_scope
 from app.execution.broker import get_broker
 
 
+class InvalidOrder(ValueError):
+    """Order dict fails the structural invariants every proposer must meet."""
+
+
 class OrderNotFound(LookupError):
     """No order with that id exists."""
 
@@ -42,8 +46,30 @@ def _new_id() -> str:
     return "ord_" + uuid.uuid4().hex[:8]
 
 
+def _validate(order: dict) -> None:
+    """Structural invariants at the ONE chokepoint every proposer shares.
+
+    The pydantic model on POST /orders/propose covers the HTTP boundary,
+    but agent-side proposers (run_propose, alerts, scan loop, MCP) call
+    create_pending with raw dicts — garbage here would corrupt the
+    sign-sensitive positions math downstream, so reject loudly.
+    """
+    side = order.get("side")
+    if side not in ("buy", "sell"):
+        raise InvalidOrder(f"side must be 'buy' or 'sell', got {side!r}")
+    try:
+        qty = float(order.get("qty") or 0)
+    except (TypeError, ValueError):
+        raise InvalidOrder(f"qty must be numeric, got {order.get('qty')!r}") from None
+    if qty <= 0:
+        raise InvalidOrder(f"qty must be > 0, got {qty!r}")
+    if not (order.get("symbol") or "").strip():
+        raise InvalidOrder("symbol must be non-empty")
+
+
 def create_pending(order: dict) -> dict:
     """Create an order in PENDING_APPROVAL state. No broker contact."""
+    _validate(order)
     record = {**order, "id": _new_id(), "status": "PENDING_APPROVAL"}
     record.setdefault("portfolio_id", DEFAULT_PORTFOLIO_ID)
     # Proposal timestamp (H2c): lets the approver see how stale a pending

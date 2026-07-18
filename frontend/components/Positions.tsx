@@ -12,10 +12,15 @@ export default function Positions({
   portfolio?: string;
 }) {
   // Reload on approval (refreshKey) and poll every 15s for live P&L.
+  // resetOnUrlChange: never render one portfolio's P&L under another's view.
   const { data } = usePolledFetch<Position[]>(
     `/api/orders/positions/all${portfolioQuery(portfolio)}`,
     15000,
-    { refreshKey, parse: (d) => (Array.isArray(d) ? (d as Position[]) : []) },
+    {
+      refreshKey,
+      resetOnUrlChange: true,
+      parse: (d) => (Array.isArray(d) ? (d as Position[]) : []),
+    },
   );
   const rows = data ?? [];
 

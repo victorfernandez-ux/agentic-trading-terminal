@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch, portfolioQuery } from "@/lib/api";
+import { timeAgo } from "@/lib/format";
 import type { Order } from "@/lib/types";
 import { usePolledFetch } from "@/lib/usePolledFetch";
 
@@ -13,13 +14,8 @@ const STATUS_COLOR: Record<string, string> = {
 
 /** "proposed 3m ago" — an est_price snapshot ages fast in a moving market. */
 function age(ts?: number): string | null {
-  if (!ts) return null;
-  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+  const t = timeAgo(ts);
+  return t ? `${t} ago` : null;
 }
 
 export default function ApprovalQueue({
@@ -40,14 +36,29 @@ export default function ApprovalQueue({
   // must disappear here — a stale card invites approving a resolved order.
   // The hook keeps last-known data on a transient failure (`error` banner)
   // instead of blanking to "No orders".
+  // resetOnUrlChange: switching portfolios must never leave the previous
+  // portfolio's orders rendered (with live Approve buttons) under the new
+  // view — blank + banner beats acting on the wrong portfolio.
   const {
     data,
     error: loadErr,
     reload: load,
   } = usePolledFetch<Order[]>(`/api/orders${portfolioQuery(portfolio)}`, 10_000, {
     refreshKey,
+    resetOnUrlChange: true,
   });
   const orders = data ?? [];
+
+  // Prune per-order errors for orders that left the list (resolved
+  // elsewhere) so a stale message can never attach to a future card.
+  useEffect(() => {
+    if (!data) return;
+    const ids = new Set(data.map((o) => o.id));
+    setErrors((prev) => {
+      const kept = Object.entries(prev).filter(([id]) => ids.has(id));
+      return kept.length === Object.keys(prev).length ? prev : Object.fromEntries(kept);
+    });
+  }, [data]);
 
   async function act(id: string, action: "approve" | "reject") {
     setBusy(id);
@@ -93,7 +104,7 @@ export default function ApprovalQueue({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {loadErr && (
-        <p style={{ fontSize: 11, color: "#e0af68", margin: 0 }}>
+        <p style={{ fontSize: 11, color: "var(--amber)", margin: 0 }}>
           Queue refresh failed — showing last known state, retrying…
         </p>
       )}
@@ -118,19 +129,19 @@ export default function ApprovalQueue({
             {o.broker_result?.status ? ` · ${o.broker_result.status}` : ""}
           </div>
           {o.thesis ? (
-            <div style={{ fontSize: 11, color: "#9aa5b1", margin: "0 0 6px", fontStyle: "italic" }}>
+            <div style={{ fontSize: 11, color: "var(--text-dim)", margin: "0 0 6px", fontStyle: "italic" }}>
               {o.thesis}
             </div>
           ) : null}
           {errors[o.id] ? (
-            <div role="alert" style={{ fontSize: 11, color: "#f7768e", margin: "0 0 6px" }}>
+            <div role="alert" style={{ fontSize: 11, color: "var(--red)", margin: "0 0 6px" }}>
               {errors[o.id]}
             </div>
           ) : null}
           {o.status === "PENDING_APPROVAL" &&
             (confirming === o.id ? (
               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ fontSize: 11, color: "#e0af68" }}>
+                <span style={{ fontSize: 11, color: "var(--amber)" }}>
                   Confirm {o.side.toUpperCase()} {o.qty} {o.symbol}
                   {o.est_notional ? ` (~$${o.est_notional})` : ""}?
                 </span>

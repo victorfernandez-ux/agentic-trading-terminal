@@ -91,6 +91,7 @@ def _propose(**overrides):
 @pytest.mark.parametrize("bad", [
     {"qty": 0}, {"qty": -3}, {"side": "hold"}, {"side": "BUY"},
     {"order_type": "stop"}, {"symbol": ""}, {"limit_price": 0},
+    {"est_price": 0}, {"est_price": -500},
 ])
 def test_invalid_proposals_rejected_422(bad):
     r = _propose(**bad)
@@ -102,6 +103,19 @@ def test_valid_proposal_still_accepted():
     r = _propose()
     assert r.status_code == 200
     assert r.json()["status"] == "PENDING_APPROVAL"
+
+
+def test_store_chokepoint_rejects_garbage_from_any_proposer():
+    """Agent-side proposers bypass the HTTP pydantic model — the store
+    itself must reject structural garbage (review finding)."""
+    from app.execution import orders_store
+
+    for bad in ({"symbol": "X", "side": "hold", "qty": 1},
+                {"symbol": "X", "side": "buy", "qty": 0},
+                {"symbol": "X", "side": "buy", "qty": "nope"},
+                {"symbol": "", "side": "buy", "qty": 1}):
+        with pytest.raises(orders_store.InvalidOrder):
+            orders_store.create_pending(bad)
 
 
 # ── H1d: guardrail flag cannot be weakened ──────────────────────────────

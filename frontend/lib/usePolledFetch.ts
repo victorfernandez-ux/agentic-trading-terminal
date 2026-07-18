@@ -40,6 +40,7 @@ export function usePolledFetch<T = unknown>(
   const parseRef = useRef(parse);
   parseRef.current = parse;
   const seq = useRef(0);
+  const lastUrl = useRef(url);
 
   const load = useCallback(async () => {
     if (!url) return;
@@ -57,16 +58,20 @@ export function usePolledFetch<T = unknown>(
   }, [url]);
 
   useEffect(() => {
-    if (resetOnUrlChange) {
+    // Clear only on an ACTUAL url change (per-symbol/per-portfolio panels
+    // must not show the previous target's data) — not on refreshKey bumps,
+    // which would flash the empty state on every mutation.
+    if (resetOnUrlChange && lastUrl.current !== url) {
       setData(null);
       setError(false);
     }
+    lastUrl.current = url;
     load();
     if (intervalMs > 0) {
       const t = setInterval(load, intervalMs);
       return () => clearInterval(t);
     }
-  }, [load, intervalMs, refreshKey, resetOnUrlChange]);
+  }, [load, url, intervalMs, refreshKey, resetOnUrlChange]);
 
   return { data, error, reload: load };
 }
