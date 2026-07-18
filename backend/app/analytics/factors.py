@@ -141,7 +141,7 @@ def alpha101(bars: list[dict]) -> float | None:
         return None
     b = bars[-1]
     o, h, lo, c = b.get("o"), b.get("h"), b.get("l"), b.get("c")
-    if None in (o, h, lo, c):
+    if o is None or h is None or lo is None or c is None:
         return None
     return round((c - o) / ((h - lo) + 0.001), 4)
 

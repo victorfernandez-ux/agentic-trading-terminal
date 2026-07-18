@@ -119,23 +119,25 @@ def get_client() -> AsyncOpenAI:
     # Deadline + transient retry on every client (H1a): a hung provider
     # connection must fail the call, not the whole agent run. The SDK
     # retries connect errors / 429 / 5xx itself up to llm_max_retries.
-    opts = {"timeout": settings.llm_timeout_seconds,
-            "max_retries": settings.llm_max_retries}
+    timeout = settings.llm_timeout_seconds
+    retries = settings.llm_max_retries
     if provider == "openrouter":
         if not settings.openrouter_api_key:
             raise LLMNotConfigured("OPENROUTER_API_KEY is not set")
         return AsyncOpenAI(
             api_key=settings.openrouter_api_key,
             base_url=settings.openrouter_base_url,
-            **opts,
+            timeout=timeout,
+            max_retries=retries,
         )
     if provider == "openai":
         if not settings.openai_api_key:
             raise LLMNotConfigured("OPENAI_API_KEY is not set")
-        return AsyncOpenAI(api_key=settings.openai_api_key, **opts)
+        return AsyncOpenAI(api_key=settings.openai_api_key,
+                           timeout=timeout, max_retries=retries)
     if provider == "ollama":
         return AsyncOpenAI(api_key="ollama", base_url="http://localhost:11434/v1",
-                           **opts)
+                           timeout=timeout, max_retries=retries)
     raise LLMNotConfigured(f"Unsupported provider: {provider}")
 
 

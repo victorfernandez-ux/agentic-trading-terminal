@@ -16,6 +16,8 @@ Built-in strategies (the registry mirrors the agent-tool pattern):
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from app.analytics.risk import compute_risk
 from app.analytics.technical import rsi, sma
 
@@ -23,7 +25,7 @@ from app.analytics.technical import rsi, sma
 def _signals_sma_cross(closes: list[float], fast: int = 10, slow: int = 30) -> list[int]:
     f, s = sma(closes, fast), sma(closes, slow)
     return [
-        1 if (f[i] is not None and s[i] is not None and f[i] > s[i]) else 0
+        1 if (fi := f[i]) is not None and (si := s[i]) is not None and fi > si else 0
         for i in range(len(closes))
     ]
 
@@ -47,7 +49,7 @@ def _signals_buy_hold(closes: list[float]) -> list[int]:
     return [1] * len(closes)
 
 
-STRATEGIES = {
+STRATEGIES: dict[str, Callable[..., list[int]]] = {
     "sma_cross": _signals_sma_cross,
     "rsi_reversion": _signals_rsi_reversion,
     "buy_hold": _signals_buy_hold,

@@ -49,7 +49,7 @@ def _round_trips(fills: list[dict]) -> list[dict]:
             continue
         signed = qty if o.get("side") == "buy" else -qty
         while abs(signed) > _EPS:
-            if abs(pos) < _EPS:  # flat -> this fill opens a new trip
+            if abs(pos) < _EPS or trip is None:  # flat -> new trip
                 pos = 0.0
                 trip = {
                     "direction": "long" if signed > 0 else "short",

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
@@ -175,7 +175,9 @@ async def research_node(state: AgentState) -> AgentState:
     risk metrics, personas, news) are extra evidence and never break the run.
     Zero LLM tokens here -- the thesis is formed by the debate node."""
     symbol = state["symbol"]
-    quote, bars, ind, riskm, personas, news = await asyncio.gather(
+    # Each entry is the tool's dict payload or, with return_exceptions=True,
+    # the exception it raised — hence the explicit Any + isinstance guards.
+    results: list[Any] = list(await asyncio.gather(
         get_quote_tool(symbol),
         get_bars_tool(symbol, timeframe="1D", limit=60),
         get_indicators_tool(symbol, timeframe="1D", limit=120),
@@ -183,7 +185,8 @@ async def research_node(state: AgentState) -> AgentState:
         consult_personas_tool(symbol),
         get_news_tool(symbol, limit=5),
         return_exceptions=True,
-    )
+    ))
+    quote, bars, ind, riskm, personas, news = results
     for required in (quote, bars):
         if isinstance(required, BaseException):
             raise required

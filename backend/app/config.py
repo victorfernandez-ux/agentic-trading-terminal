@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     scan_universe: str = "sp100"
     # Backtest run cards (roadmap B1): artifact directory, gitignored.
     runs_dir: str = ".private/runs"
+    # Audit write-ahead fallback (H5b): where events land if the DB write
+    # fails. None -> "<dirname(runs_dir)>/audit-wal.jsonl".
+    audit_wal_file: str | None = None
     # Kill switch (roadmap F3): if this file exists, every broker
     # submission raises TradingHalted. `touch` it to halt, delete to resume.
     kill_switch_file: str = ".private/KILL_SWITCH"

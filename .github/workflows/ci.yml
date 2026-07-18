@@ -25,6 +25,8 @@ jobs:
           pip install -e . --no-deps
       - name: Lint (ruff)
         run: ruff check .
+      - name: Typecheck (mypy)
+        run: mypy
       - name: Tests
         run: pytest -v
 

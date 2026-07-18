@@ -112,6 +112,8 @@ async def approve(order_id: str) -> dict:
     """Human approval -> submit to the active (paper) broker; persist result."""
     _claim(order_id, "SUBMITTED")  # raises OrderNotFound / InvalidOrderState
     record = get(order_id)
+    if record is None:  # claimed row vanished mid-flight — treat as missing
+        raise OrderNotFound(order_id)
     record["status"] = "SUBMITTED"
     broker = get_broker()
     try:
@@ -147,6 +149,8 @@ def reject(order_id: str) -> dict:
     """Human rejection. Only a PENDING_APPROVAL order can be rejected."""
     _claim(order_id, "REJECTED")  # raises OrderNotFound / InvalidOrderState
     record = get(order_id)
+    if record is None:  # claimed row vanished mid-flight — treat as missing
+        raise OrderNotFound(order_id)
     record["status"] = "REJECTED"
     _save(order_id, record)
     audit_log("order.rejected", record)
