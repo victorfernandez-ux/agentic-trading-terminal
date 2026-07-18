@@ -7,16 +7,9 @@
  * trades. Refreshes every 5 minutes; the backend caches for 10.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
-
-type FG = {
-  market: string;
-  value?: number;
-  label?: string;
-  source?: string;
-  error?: string;
-};
+import { useState } from "react";
+import type { FearGreedReading as FG } from "@/lib/types";
+import { usePolledFetch } from "@/lib/usePolledFetch";
 
 // Five sentiment bands, drawn left→right across the dial.
 const BANDS = [
@@ -104,30 +97,25 @@ function Dial({ data }: { data: FG | null }) {
   );
 }
 
-export default function FearGreed() {
-  const [stocks, setStocks] = useState<FG | null>(null);
-  const [crypto, setCrypto] = useState<FG | null>(null);
+function useFearGreed(market: "stocks" | "crypto"): FG | null {
+  const { data, error } = usePolledFetch<FG>(
+    `/api/analytics/sentiment/fear-greed?market=${market}`,
+    300_000,
+  );
+  // error WINS over kept data: a pre-outage sentiment reading shown as
+  // current is worse than "unavailable" (review finding — the old code
+  // degraded the dial on every failed refresh; preserve that).
+  if (error) return { market, error: "offline" };
+  return data;
+}
+
+/** embedded=true (desktop): renders inside the Watchlist panel with its own
+ *  divider + title. embedded=false (mobile): the page wraps it in a panel
+ *  that already provides the title — rendering our own duplicated it. */
+export default function FearGreed({ embedded = true }: { embedded?: boolean }) {
   const [market, setMarket] = useState<"stocks" | "crypto">("stocks");
-
-  const load = useCallback(async () => {
-    const get = async (m: string): Promise<FG> => {
-      try {
-        const r = await apiFetch(`/api/analytics/sentiment/fear-greed?market=${m}`);
-        return await r.json();
-      } catch {
-        return { market: m, error: "offline" };
-      }
-    };
-    const [s, c] = await Promise.all([get("stocks"), get("crypto")]);
-    setStocks(s);
-    setCrypto(c);
-  }, []);
-
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 300_000);
-    return () => clearInterval(t);
-  }, [load]);
+  const stocks = useFearGreed("stocks");
+  const crypto = useFearGreed("crypto");
 
   const active = market === "stocks" ? stocks : crypto;
 
@@ -151,8 +139,8 @@ export default function FearGreed() {
   );
 
   return (
-    <div style={{ marginTop: 16, borderTop: "1px solid #1c2330", paddingTop: 12 }}>
-      <h2 className="panel-title">Fear &amp; Greed</h2>
+    <div style={embedded ? { marginTop: 16, borderTop: "1px solid #1c2330", paddingTop: 12 } : undefined}>
+      {embedded && <h2 className="panel-title">Fear &amp; Greed</h2>}
       <div
         style={{
           display: "flex",

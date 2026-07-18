@@ -142,9 +142,24 @@ _AUTO_TASKS: set[asyncio.Task] = set()      # keep refs so tasks aren't GC'd
 
 
 def _auto_cap_ok(now: float) -> bool:
+    """Sliding-window cap: audit-trail count (crash-safe, shared helper
+    with the scan loop) combined with the in-process deque via max().
+
+    The deque alone forgot launches on restart; the DB count alone goes
+    blind when audit WRITES fail but reads still work (events divert to
+    the WAL and the count stays low). max() of both closes each one's
+    hole; on a DB read failure the deque carries the cap alone — a cap
+    check never kills the evaluator.
+    """
     while _AUTO_RUNS and now - _AUTO_RUNS[0] > _AUTO_WINDOW_S:
         _AUTO_RUNS.popleft()
-    return len(_AUTO_RUNS) < settings.alert_auto_research_per_hour
+    mem = len(_AUTO_RUNS)
+    try:
+        from app.core.audit import count_recent
+        n = max(count_recent("alert.auto_research.start", _AUTO_WINDOW_S), mem)
+    except Exception:  # noqa: BLE001 — fall back to the in-memory window
+        n = mem
+    return n < settings.alert_auto_research_per_hour
 
 
 async def _auto_research(alert: dict, event: dict) -> None:

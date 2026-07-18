@@ -44,6 +44,13 @@ export async function apiFetch(input: string, init?: RequestInit): Promise<Respo
   return res;
 }
 
+/** Portfolio filter query string. "default" keeps the unfiltered legacy
+ *  view (orders may predate portfolio stamping); anything else filters
+ *  server-side. Shared so the queue and positions can't drift. */
+export function portfolioQuery(portfolio: string): string {
+  return portfolio !== "default" ? `?portfolio_id=${encodeURIComponent(portfolio)}` : "";
+}
+
 /** Append ?token= (or &token=) to a URL for header-less clients (SSE/WS). */
 export function tokenized(url: string): string {
   const token = getToken();

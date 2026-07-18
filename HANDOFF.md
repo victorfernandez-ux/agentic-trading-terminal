@@ -216,11 +216,18 @@ no-new-privileges, localhost-only ports incl. db/redis, versioned tags — pin d
 NOT built in-session, run `docker compose build` before deploying). (G2) **LLM retry**:
 complete_json retries once on empty/unparseable output with the failure described in the prompt,
 then raises typed LLMResponseError (the silent `{"raw": ...}` path is gone); retries count toward
-G1 usage. Backend tests: **299**.
+G1 usage. **v1.18 = Hardening roadmap H1–H6** (July 18, 2026 — from the four-reviewer audit; see
+ROADMAP.md "Hardening roadmap"): LLM call deadline + typed transport failures; SQLite fallback
+refused in production; strict order validation (side/qty/order_type); REQUIRE_HUMAN_APPROVAL
+asserted at startup; constant-time token compare; ApprovalQueue fail-loud + polling + thesis/age/
+est_price on cards + two-step confirm; frontend ESLint + Vitest (14 tests) + shared usePolledFetch
+hook + shared types; requirements.lock (uv) + LICENSE (MIT, clean-room notices) + complete
+.env.example; alembic-first Docker entrypoint (create_all restricted to SQLite dev); mypy clean +
+in CI; audit JSONL WAL fallback. Backend tests: **324**.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
-plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE + README
-disclaimer pending; API_TOKEN + CORS lockdown required before any hosted deployment).
+plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE landed in H4;
+API_TOKEN + CORS lockdown required before any hosted deployment).
 This doc is the single source of truth for a fresh reviewer. Pair it with `PROJECT_PLAN.md` (vision/architecture/tooling research).
 
 ---
@@ -237,20 +244,17 @@ a human calls approve. Default broker is a paper simulator; the live path delibe
 
 ---
 
-## How to run (Windows)
+## How to run
 
 Two servers, two terminals. You only ever open **http://localhost:3000** (the frontend); it proxies `/api/*`
 to the backend on **:8000**.
 
-**Backend** (from `backend\`):
-```powershell
-.\run-dev.ps1
-```
-First run creates `.venv` and installs deps (~1–2 min), then starts uvicorn on :8000. The script always
-launches via `.venv\Scripts\python.exe -m uvicorn` so it can't pick up the wrong Python environment.
+**Backend** (from `backend/`): `.\run-dev.ps1` on Windows, `./run-dev.sh` on Linux/macOS.
+First run creates `.venv` and installs deps (~1–2 min), then starts uvicorn on :8000. Both scripts
+always launch via the project venv's python so they can't pick up the wrong Python environment.
 
-**Frontend** (from `frontend\`):
-```powershell
+**Frontend** (from `frontend/`):
+```bash
 npm install   # first time only
 npm run dev
 ```
@@ -288,9 +292,12 @@ DB-backed, `positions.py`, `broker.py` paper), `api/` (health, market, agents, o
 - Approval → paper fill: order flips PENDING_APPROVAL → SUBMITTED ("filled (simulated)").
 - Positions/P&L: filled order produces a tracked position with live unrealized P&L.
 - Persistence: order written in one process is read back by a fresh interpreter (still SUBMITTED).
-- Tests: `pytest` → 5 passing (health + approval gate + 3 persistence).
+- Tests: `pytest` → **324 passing** (~15s, fully offline/mocked — see README "Test" for the
+  coverage map). `ruff check .`, `mypy`, and the frontend's `npm run lint` + `npm test` (14
+  Vitest tests) are all clean and all enforced in CI.
 
-Run tests: from `backend\`, `.\.venv\Scripts\python.exe -m pytest -q`
+Run tests: from `backend/`, `.\.venv\Scripts\python.exe -m pytest -q` (Windows) or
+`.venv/bin/python -m pytest -q` (Linux/macOS).
 
 ---
 

@@ -6,8 +6,10 @@ order submitted to broker (paper by default).
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.execution import orders_store as store
 from app.execution import portfolios
@@ -18,16 +20,19 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 
 
 class OrderProposal(BaseModel):
-    symbol: str
-    side: str  # buy | sell
-    qty: float
-    order_type: str = "market"
-    limit_price: float | None = None
+    # Constrained (H1c): a qty<=0 or unknown side would silently corrupt
+    # positions math (`side == "buy"` signs the aggregate), so reject at
+    # the boundary instead of storing garbage in PENDING_APPROVAL.
+    symbol: str = Field(min_length=1)
+    side: Literal["buy", "sell"]
+    qty: float = Field(gt=0)
+    order_type: Literal["market", "limit"] = "market"
+    limit_price: float | None = Field(default=None, gt=0)
     # Price snapshot at proposal time. Agent drafts always carry one; for
     # human proposals it's optional but feeds the fill price and the
     # behavior profile's rejection counterfactuals (D1) — without it a
     # rejected manual order can never be scored.
-    est_price: float | None = None
+    est_price: float | None = Field(default=None, gt=0)
     source: str = "human"  # agent | human
     portfolio_id: str = portfolios.DEFAULT_PORTFOLIO_ID
 

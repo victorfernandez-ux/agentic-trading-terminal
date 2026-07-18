@@ -171,8 +171,12 @@ async def run_screen(screen: str, symbols: list[str], top: int = 20) -> dict:
     predicate, reason, sort_key, desc = spec
 
     seen: set[str] = set()
-    uni = [s for s in (x.strip().upper() for x in symbols)
-           if s and not (s in seen or seen.add(s))][:120]
+    uni: list[str] = []
+    for s in (x.strip().upper() for x in symbols):
+        if s and s not in seen:
+            seen.add(s)
+            uni.append(s)
+    uni = uni[:120]
 
     async def _one(sym: str) -> dict | None:
         try:

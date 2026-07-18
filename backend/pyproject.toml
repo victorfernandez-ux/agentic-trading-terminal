@@ -46,3 +46,18 @@ target-version = "py311"  # aligned with requires-python >=3.11
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+
+[tool.mypy]
+# Baseline config (hardening roadmap H5): default strictness, zero errors,
+# enforced in CI. Ratchet per-module (strict = true overrides) as modules
+# get fully typed — start with agents/ and execution/.
+python_version = "3.11"
+files = ["app"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+# ccxt ships no type stubs or py.typed marker.
+module = ["ccxt", "ccxt.*"]
+ignore_missing_imports = true

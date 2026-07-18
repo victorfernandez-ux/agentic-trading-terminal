@@ -241,7 +241,8 @@ class AlpacaProvider:
                 "bid": q.get("bp"), "ask": q.get("ap")}
 
     async def get_bars(self, symbol: str, timeframe: str = "1D", limit: int = 100) -> dict:
-        params = {"timeframe": _ALPACA_TF.get(timeframe, "1Day"), "limit": limit}
+        params: dict[str, str | int] = {
+            "timeframe": _ALPACA_TF.get(timeframe, "1Day"), "limit": limit}
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.get(f"{self.DATA}/stocks/{symbol}/bars", headers=self._headers(), params=params)
             r.raise_for_status()
@@ -278,7 +279,8 @@ class PolygonProvider:
         end = date.today()
         start = end - timedelta(days=_POLY_LOOKBACK_DAYS.get(span, 730))
         url = f"{self.BASE}/v2/aggs/ticker/{symbol}/range/{mult}/{span}/{start}/{end}"
-        params = {"limit": limit, "sort": "desc", "apiKey": settings.polygon_api_key}
+        params: dict[str, str | int | None] = {
+            "limit": limit, "sort": "desc", "apiKey": settings.polygon_api_key}
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.get(url, params=params)
             r.raise_for_status()

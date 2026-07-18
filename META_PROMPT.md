@@ -33,30 +33,29 @@ Yahoo-primary data, LLM via OpenRouter.
 
 ## Development plan (do in order; each item: tests green → commit → next)
 
-The Vibe-Trading adoption roadmap (ROADMAP.md) is COMPLETE — Phases A-G all landed.
-There is no pre-planned next cycle: ask the owner what to prioritize. Strong candidates, in
-suggested order:
+**The Hardening roadmap (`ROADMAP.md` Phases H1–H6) is COMPLETE** (July 18, 2026, PR #12 — see
+HANDOFF v1.18). H7 is partially done; its remaining backlog (full Analytics per-tab split,
+hex→token sweep, provider HTTP retry/backoff, dedicated api/* endpoint tests) is fair filler work
+any cycle. Working style going forward: one branch + one PR per change (**no direct-to-main**);
+per change: implement → all six CI gates green → gstack `/review` → `/qa` for UI-touching work →
+PR → merge → update HANDOFF.md, tick ROADMAP.md, rewrite this section. A standalone `/cso`
+security audit of the backend is a good next independent check.
 
-1. **Verify the hosted-deploy path end-to-end**: docker compose build (F4 was authored but not
-   built in-session), API_TOKEN + CORS_ORIGINS set, Postgres via compose, alembic upgrade head,
-   PWA pointed at the hosted origin. The hosted-deploy checklist in HANDOFF/META item 4 (v1.9)
-   is now fully implementable.
-
-2. **ROADMAP "considered & deferred" revisits**: per-symbol FTS5/BM25 reflection search (A1's
-   deferred half), vision chart reads (now that G1 gives cost visibility), Discord/Slack notify
-   adapters, run-card browser UI over GET /analytics/backtest/runs.
-
-3. **Live-market soak test**: run the terminal against live data for a week — alerts, scan loop
-   (opt-in), reflections accumulating, Behavior tab filling in — and file whatever breaks as the
-   next cycle.
-
-4. **Docs**: README refresh for everything v1.13-v1.17 added (MCP server usage, Telegram setup,
-   kill switch, tickets), plus the LICENSE + disclaimer items still pending from META item 4.
+After the hardening cycle, the previous candidates remain (in suggested order): hosted-deploy
+verification end-to-end (docker compose build, API_TOKEN + CORS, Postgres, alembic — H4d clears
+the migration blocker); ROADMAP "considered & deferred" revisits (FTS5 reflection search, vision
+chart reads, Discord/Slack adapters, run-card browser); a week-long live-market soak test; README
+refresh for v1.13–v1.17 features (partly covered by H6).
 
 ## Working rules
 
-- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (299+ green).
-  (Linux/CI: `backend/.venv/bin/python -m pytest -q`.)
+- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (324+ green).
+  (Linux/CI: `backend/.venv/bin/python -m pytest -q`.) Also keep `ruff check .`, `mypy`, and the
+  frontend's `npm run lint` + `npm test` green — all four are CI gates.
+- Backend deps are locked: after changing pyproject.toml, regenerate with
+  `uv pip compile pyproject.toml --extra dev -o requirements.lock` (CI installs from the lock).
+- Frontend styling: use the CSS tokens in `globals.css` (var(--green) etc.), not hex literals —
+  the legacy hex sweep is hardening-roadmap H7 backlog; don't add new ones.
 - **Restart the backend after backend changes** — use repo-root `start-backend-logged.bat`
   (kills :8000 zombies incl. orphaned `--multiprocessing-fork` reload workers, logs to
   `.private\backend.log`). Hot-reload misfires on this synced folder.

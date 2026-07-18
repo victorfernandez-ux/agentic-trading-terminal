@@ -66,8 +66,8 @@ def compute_correlations(bars_by_symbol: dict[str, list[dict]],
             row.append(1.0 if a == b else _pearson(rets[a], rets[b]))
         matrix.append(row)
     # Concentration signal: the average absolute off-diagonal correlation.
-    off = [abs(matrix[i][j]) for i in range(len(symbols))
-           for j in range(len(symbols)) if i != j and matrix[i][j] is not None]
+    off = [abs(v) for i, row in enumerate(matrix)
+           for j, v in enumerate(row) if i != j and v is not None]
     return {
         "symbols": symbols,
         "matrix": matrix,

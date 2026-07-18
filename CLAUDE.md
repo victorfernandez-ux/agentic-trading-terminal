@@ -20,7 +20,12 @@ Next.js frontend (`frontend/`), SQLite by default.
   analytics(technical, risk, backtest, valuation, personas, options) · execution · api
 - `frontend/` — `app/page.tsx` grid; `components/` Watchlist · PriceChart · AgentConsole ·
   ApprovalQueue · Positions · Analytics
-- Tests: `backend/tests/` (pytest; run from `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`)
+- Tests: `backend/tests/` (pytest; from `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`,
+  Linux/macOS: `.venv/bin/python -m pytest -q`) + `frontend/tests/` (`npm test`). CI gates:
+  pytest, ruff, mypy, eslint, vitest, next build — keep all green.
+- Backend deps are locked (`backend/requirements.lock`); regenerate via
+  `uv pip compile pyproject.toml --extra dev -o requirements.lock` after any pyproject change.
+- Frontend styling uses the `globals.css` tokens — no new hardcoded hex colors.
 
 ## Working preferences (owner-set)
 - **No recurring/hourly self check-ins for PR babysitting.** Do not schedule `send_later`/cron
@@ -34,3 +39,16 @@ Next.js frontend (`frontend/`), SQLite by default.
 - Market/analytics endpoints take `symbol` as a **query param** (crypto `/` breaks path segments).
 - Yahoo v7/v10 endpoints (options chains, fundamentals) need the cookie+crumb dance —
   see `app/data/options_chain.py`. The v8 chart endpoint stays keyless.
+
+## gstack (recommended)
+
+This project uses [gstack](https://github.com/garrytan/gstack) for AI-assisted workflows.
+Install it for the best experience:
+
+```bash
+git clone --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
+cd ~/.claude/skills/gstack && ./setup --team
+```
+
+Skills like /qa, /ship, /review, /investigate, and /browse become available after install.
+Use /browse for all web browsing. Use ~/.claude/skills/gstack/... for gstack file paths.

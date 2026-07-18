@@ -21,24 +21,27 @@ Next up: agent evidence fan-out + bull/bear debate, hardening, auth.
 > Paper-trading only. No autonomous money movement. Every order is human-approved. State persists to a local
 > SQLite DB (or Postgres if configured).
 
-## Run it (Windows)
+## Run it
 
 You open only **http://localhost:3000**; it proxies `/api/*` to the backend on **:8000**. Two terminals:
 
-**Backend** — from `backend\`:
+**Backend** — from `backend/`:
 ```powershell
-.\run-dev.ps1
+.\run-dev.ps1     # Windows
 ```
-First run builds `.venv` and installs deps (~1–2 min). Always launches through the project venv, so it can't
-grab the wrong Python. Put your `OPENROUTER_API_KEY` in `backend\.env`.
+```bash
+./run-dev.sh      # Linux / macOS
+```
+First run builds `.venv` and installs deps (~1–2 min). Both scripts always launch through the project
+venv, so they can't grab the wrong Python. Put your `OPENROUTER_API_KEY` in `backend/.env`.
 
-**Frontend** — from `frontend\`:
-```powershell
+**Frontend** — from `frontend/`:
+```bash
 npm install   # first time
 npm run dev
 ```
 
-> **After changing backend code, restart the backend** (Ctrl+C, `.\run-dev.ps1`). Hot-reload is unreliable on
+> **After changing backend code, restart the backend** (Ctrl+C, rerun the script). Hot-reload is unreliable on
 > this synced folder — see HANDOFF.md.
 
 ## Use it
@@ -69,15 +72,18 @@ npm run dev
 
 ## Test
 
-From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q`  (185 passing: health, approval gate +
-double-approve race, persistence, audit log + replay, order-sizing notional cap, WebSocket streaming,
-SSE agent-stream sequence, evidence fan-out + bull/bear debate (scripted LLM), the analytics suite —
-indicator math, risk metrics, backtester no-lookahead/fees, DCF closed-form checks, persona scoring,
-options (Hull textbook values, put-call parity, IV round-trip), spark batch quotes, symbol search,
-news parse/cache, screener conditions over crafted universes, alert crossing/cooldown/push semantics,
-the alert→research loop (opt-in flag, hourly cap, approval-gate parity), sizing bands, the
-hardening layer — request-scoped DB sessions, error-envelope shape, Alembic schema parity — and
-token auth + portfolios (401 envelopes, WS token, default-portfolio behavior parity))
+Backend — from `backend/`: `.\.venv\Scripts\python.exe -m pytest -q` (Windows) or
+`.venv/bin/python -m pytest -q` (Linux/macOS). **324 passing**, fully offline/mocked, ~15s:
+health, the approval gate (double-approve race, concurrent approve-submits-exactly-once), paper-only
+fail-closed + kill switch, in-code sizing (notional cap, ATR bands, anti-pyramiding), strict order
+validation, persistence, audit log + replay + WAL fallback, streaming (WS quotes, SSE agent runs),
+evidence fan-out + bull/bear debate (scripted LLM), LLM retry/usage/cost, the full analytics suite
+(indicators, risk, backtest + walk-forward/bootstrap validation, DCF, personas, options, screener,
+factors, correlations, behavior), provider fallback chain, alerts + alert→research and scan→research
+loops, reflections + hypotheses, MCP propose-only surface, Telegram notify, auth + tickets +
+portfolios. Lint/typecheck: `ruff check .` and `mypy` (both clean, both in CI).
+
+Frontend — from `frontend/`: `npm test` (Vitest: approval-gate UI + auth layer), `npm run lint`.
 
 ## Layout
 
@@ -87,6 +93,7 @@ HANDOFF.md        status · decisions · known issues · next steps
 docker-compose.yml  Postgres + Redis (optional; SQLite is the default)
 backend/          FastAPI + LangGraph agents + data providers + DB
   app/  main · config · core(db,audit) · data/providers · agents · analytics · execution · api
-  run-dev.ps1     reliable dev launcher (.venv-scoped)
+  run-dev.ps1 / run-dev.sh   reliable dev launchers (.venv-scoped)
+  requirements.lock          pinned deps (regenerate: uv pip compile pyproject.toml --extra dev -o requirements.lock)
 frontend/         Next.js terminal UI (watchlist · chart · agent console · approval · positions)
 ```

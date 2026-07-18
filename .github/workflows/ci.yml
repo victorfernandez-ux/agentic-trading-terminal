@@ -18,11 +18,15 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: backend/pyproject.toml
-      - name: Install
-        run: pip install -e ".[dev]"
+          cache-dependency-path: backend/requirements.lock
+      - name: Install (locked — regenerate with `uv pip compile pyproject.toml --extra dev -o requirements.lock`)
+        run: |
+          pip install -r requirements.lock
+          pip install -e . --no-deps
       - name: Lint (ruff)
         run: ruff check .
+      - name: Typecheck (mypy)
+        run: mypy
       - name: Tests
         run: pytest -v
 
@@ -40,5 +44,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install
         run: npm ci --no-audit --no-fund
+      - name: Lint (eslint)
+        run: npm run lint
+      - name: Tests (vitest)
+        run: npm test
       - name: Build
         run: npx next build

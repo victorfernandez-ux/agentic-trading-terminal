@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
-
-type Portfolio = { id: string; name: string };
+import type { Portfolio } from "@/lib/types";
+import { usePolledFetch } from "@/lib/usePolledFetch";
 
 // Selecting "default" preserves the pre-portfolio view (no filter, all
 // orders/positions) — other portfolios filter the queue and positions.
@@ -14,14 +12,13 @@ export default function PortfolioSwitcher({
   value: string;
   onChange: (id: string) => void;
 }) {
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-
-  useEffect(() => {
-    apiFetch("/api/portfolios")
-      .then((r) => r.json())
-      .then((d) => setPortfolios(Array.isArray(d?.portfolios) ? d.portfolios : []))
-      .catch(() => setPortfolios([]));
-  }, []);
+  const { data } = usePolledFetch<Portfolio[]>("/api/portfolios", 0, {
+    parse: (d) => {
+      const list = (d as { portfolios?: unknown })?.portfolios;
+      return Array.isArray(list) ? (list as Portfolio[]) : [];
+    },
+  });
+  const portfolios = data ?? [];
 
   // With only the seeded default there is nothing to switch — hide.
   if (portfolios.length < 2) return null;
