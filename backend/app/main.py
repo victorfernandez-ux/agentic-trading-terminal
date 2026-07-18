@@ -25,7 +25,9 @@ log = logging.getLogger("app")
 
 
 def _assert_guardrails() -> None:
-    """Fail startup if a non-negotiable guardrail flag is weakened (H1d).
+    """Fail startup if a non-negotiable guardrail flag is weakened (H1d)
+    or a production deploy is dangerously misconfigured (H-1, from the
+    security audit).
 
     The approval gate is structural (only orders_store.approve can reach a
     broker), so REQUIRE_HUMAN_APPROVAL=false would not open a bypass — but
@@ -36,6 +38,22 @@ def _assert_guardrails() -> None:
         raise RuntimeError(
             "REQUIRE_HUMAN_APPROVAL=false is not supported: the human "
             "approval gate is non-negotiable (see CLAUDE.md guardrails)")
+
+    # Production must not boot open (H-1): the shipped image sets
+    # APP_ENV=production, so a hosted deploy that forgets API_TOKEN would
+    # otherwise run every endpoint unauthenticated. Fail loud instead of
+    # silently serving an open trading API.
+    if settings.app_env == "production":
+        if not settings.api_token:
+            raise RuntimeError(
+                "API_TOKEN must be set when APP_ENV=production — refusing to "
+                "start an unauthenticated trading API. Set API_TOKEN, or run "
+                "with APP_ENV=development for local use.")
+        origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+        if any(o == "*" for o in origins):
+            raise RuntimeError(
+                "CORS_ORIGINS must not be '*' when APP_ENV=production — pin "
+                "the browser origins that may call the API.")
 
 
 def _token_eq(candidate: str | None, expected: str) -> bool:

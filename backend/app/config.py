@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     # Alert->research loop: max automatic agent runs per rolling hour across
     # all alerts. Proposals only -- the human approval gate is untouched.
     alert_auto_research_per_hour: int = 4
+    # Manual agent-run cost cap (H-2, from the security audit): max
+    # human-triggered /agents/research|propose runs per rolling hour. Each
+    # run is several paid LLM calls; the automated loops were already
+    # capped, this closes the manual path. 0 disables the cap.
+    manual_research_per_hour: int = 30
     # Reflection memory: how many past-round-trip lessons per symbol are
     # injected into the debate evidence. 0 disables injection.
     reflections_limit: int = 5

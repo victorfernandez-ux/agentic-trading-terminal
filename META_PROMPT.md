@@ -49,7 +49,7 @@ refresh for v1.13–v1.17 features (partly covered by H6).
 
 ## Working rules
 
-- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (327+ green).
+- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (333+ green).
   (Linux/CI: `backend/.venv/bin/python -m pytest -q`.) Also keep `ruff check .`, `mypy`, and the
   frontend's `npm run lint` + `npm test` green — all four are CI gates.
 - Backend deps are locked: after changing pyproject.toml, regenerate with
