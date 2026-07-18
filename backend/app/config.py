@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     llm_model_debate: str | None = None
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
+    # Client-side deadline per LLM API call (H1a). Without it a hung
+    # provider connection stalls an agent run indefinitely.
+    llm_timeout_seconds: float = 60.0
+    # SDK-level retries for transient failures (connect errors, 429, 5xx).
+    llm_max_retries: int = 1
 
     # Safety -- deliberately conservative defaults.
     trading_mode: str = "paper"  # paper | live

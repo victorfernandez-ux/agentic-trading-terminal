@@ -12,7 +12,13 @@ import json
 from contextvars import ContextVar
 from functools import lru_cache
 
-from openai import AsyncOpenAI
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    AsyncOpenAI,
+    RateLimitError,
+)
 
 from app.config import settings
 
@@ -110,19 +116,26 @@ def get_client() -> AsyncOpenAI:
     endpoint can be selected via settings.llm_provider.
     """
     provider = settings.llm_provider
+    # Deadline + transient retry on every client (H1a): a hung provider
+    # connection must fail the call, not the whole agent run. The SDK
+    # retries connect errors / 429 / 5xx itself up to llm_max_retries.
+    opts = {"timeout": settings.llm_timeout_seconds,
+            "max_retries": settings.llm_max_retries}
     if provider == "openrouter":
         if not settings.openrouter_api_key:
             raise LLMNotConfigured("OPENROUTER_API_KEY is not set")
         return AsyncOpenAI(
             api_key=settings.openrouter_api_key,
             base_url=settings.openrouter_base_url,
+            **opts,
         )
     if provider == "openai":
         if not settings.openai_api_key:
             raise LLMNotConfigured("OPENAI_API_KEY is not set")
-        return AsyncOpenAI(api_key=settings.openai_api_key)
+        return AsyncOpenAI(api_key=settings.openai_api_key, **opts)
     if provider == "ollama":
-        return AsyncOpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
+        return AsyncOpenAI(api_key="ollama", base_url="http://localhost:11434/v1",
+                           **opts)
     raise LLMNotConfigured(f"Unsupported provider: {provider}")
 
 
@@ -167,15 +180,25 @@ async def complete_json(system: str, user: str, *, temperature: float = 0.2,
     user_payload = user
     failure = ""
     for attempt in range(2):
-        resp = await client.chat.completions.create(
-            model=used_model,
-            temperature=temperature,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_payload},
-            ],
-            response_format={"type": "json_object"},
-        )
+        try:
+            resp = await client.chat.completions.create(
+                model=used_model,
+                temperature=temperature,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_payload},
+                ],
+                response_format={"type": "json_object"},
+            )
+        except (APITimeoutError, APIConnectionError, RateLimitError) as e:
+            # The SDK already retried transient failures (H1a); surface the
+            # final failure as the same typed error the content path uses,
+            # so every caller hits one error envelope — and never a hang.
+            raise LLMResponseError(
+                f"model {used_model} unreachable: {type(e).__name__}") from e
+        except APIStatusError as e:
+            raise LLMResponseError(
+                f"model {used_model} provider error {e.status_code}") from e
         # Usage capture (G1): provider-reported tokens into the ambient
         # collector, if a run is tracking. Retries are paid calls — count
         # every attempt. Never breaks the call.

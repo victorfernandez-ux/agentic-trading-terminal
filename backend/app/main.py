@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import secrets
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -22,6 +23,28 @@ from app.core.db import init_db
 logging.basicConfig(level=settings.log_level)
 log = logging.getLogger("app")
 
+
+def _assert_guardrails() -> None:
+    """Fail startup if a non-negotiable guardrail flag is weakened (H1d).
+
+    The approval gate is structural (only orders_store.approve can reach a
+    broker), so REQUIRE_HUMAN_APPROVAL=false would not open a bypass — but
+    a flag that reads like a toggle and does nothing is worse than none.
+    Refuse to start rather than pretend.
+    """
+    if not settings.require_human_approval:
+        raise RuntimeError(
+            "REQUIRE_HUMAN_APPROVAL=false is not supported: the human "
+            "approval gate is non-negotiable (see CLAUDE.md guardrails)")
+
+
+def _token_eq(candidate: str | None, expected: str) -> bool:
+    """Constant-time token comparison (H1e) — `==` leaks a timing oracle."""
+    return candidate is not None and secrets.compare_digest(
+        candidate.encode(), expected.encode())
+
+
+_assert_guardrails()
 init_db()
 
 
@@ -90,8 +113,8 @@ async def require_api_token(request: Request, call_next):
     if token and request.url.path not in AUTH_EXEMPT_PATHS:
         from app.core import tickets
 
-        header_ok = request.headers.get("authorization") == f"Bearer {token}"
-        query_ok = request.query_params.get("token") == token
+        header_ok = _token_eq(request.headers.get("authorization"), f"Bearer {token}")
+        query_ok = _token_eq(request.query_params.get("token"), token)
         # One-time tickets (F1): single-use ?ticket= for SSE — a leaked
         # URL is worthless after the connection that redeemed it.
         ticket_ok = tickets.redeem(request.query_params.get("ticket"))

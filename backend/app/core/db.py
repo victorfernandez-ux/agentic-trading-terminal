@@ -112,7 +112,12 @@ def _sqlite_args(url: str) -> dict:
 
 
 def _make_engine():
-    """Try the configured DB; fall back to SQLite if it's unreachable."""
+    """Try the configured DB; in non-production, fall back to SQLite.
+
+    The fallback is a dev convenience only (H1b): in production a transient
+    Postgres outage at startup must NOT silently boot an empty local DB —
+    that reads as "all data vanished". Fail loudly instead.
+    """
     url = settings.database_url
     try:
         eng = create_engine(url, pool_pre_ping=True, **_sqlite_args(url))
@@ -121,6 +126,11 @@ def _make_engine():
         log.info("DB connected: %s", url.split("@")[-1])
         return eng
     except Exception as e:  # noqa: BLE001
+        if settings.app_env == "production":
+            raise RuntimeError(
+                f"configured database is unreachable ({type(e).__name__}) and "
+                "the SQLite fallback is disabled in production — fix "
+                "DATABASE_URL or the DB before starting") from e
         log.warning("DB %s unreachable (%s); using SQLite at %s",
                     url.split("@")[-1], type(e).__name__, SQLITE_URL)
         return create_engine(SQLITE_URL, **_sqlite_args(SQLITE_URL))
