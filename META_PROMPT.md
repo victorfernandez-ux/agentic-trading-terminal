@@ -49,8 +49,13 @@ refresh for v1.13–v1.17 features (partly covered by H6).
 
 ## Working rules
 
-- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (299+ green).
-  (Linux/CI: `backend/.venv/bin/python -m pytest -q`.)
+- From `backend\`: `.\.venv\Scripts\python.exe -m pytest -q` before/after each item (324+ green).
+  (Linux/CI: `backend/.venv/bin/python -m pytest -q`.) Also keep `ruff check .`, `mypy`, and the
+  frontend's `npm run lint` + `npm test` green — all four are CI gates.
+- Backend deps are locked: after changing pyproject.toml, regenerate with
+  `uv pip compile pyproject.toml --extra dev -o requirements.lock` (CI installs from the lock).
+- Frontend styling: use the CSS tokens in `globals.css` (var(--green) etc.), not hex literals —
+  the legacy hex sweep is hardening-roadmap H7 backlog; don't add new ones.
 - **Restart the backend after backend changes** — use repo-root `start-backend-logged.bat`
   (kills :8000 zombies incl. orphaned `--multiprocessing-fork` reload workers, logs to
   `.private\backend.log`). Hot-reload misfires on this synced folder.
