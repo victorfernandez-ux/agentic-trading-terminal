@@ -223,7 +223,9 @@ asserted at startup; constant-time token compare; ApprovalQueue fail-loud + poll
 est_price on cards + two-step confirm; frontend ESLint + Vitest (14 tests) + shared usePolledFetch
 hook + shared types; requirements.lock (uv) + LICENSE (MIT, clean-room notices) + complete
 .env.example; alembic-first Docker entrypoint (create_all restricted to SQLite dev); mypy clean +
-in CI; audit JSONL WAL fallback. Backend tests: **324**.
+in CI; audit JSONL WAL fallback; post-review fixes (store-level order
+validation chokepoint, legacy-volume migration stamping, portfolio-switch
+view resets). Backend tests: **327**.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE landed in H4;
@@ -292,7 +294,7 @@ DB-backed, `positions.py`, `broker.py` paper), `api/` (health, market, agents, o
 - Approval → paper fill: order flips PENDING_APPROVAL → SUBMITTED ("filled (simulated)").
 - Positions/P&L: filled order produces a tracked position with live unrealized P&L.
 - Persistence: order written in one process is read back by a fresh interpreter (still SUBMITTED).
-- Tests: `pytest` → **324 passing** (~15s, fully offline/mocked — see README "Test" for the
+- Tests: `pytest` → **327 passing** (~15s, fully offline/mocked — see README "Test" for the
   coverage map). `ruff check .`, `mypy`, and the frontend's `npm run lint` + `npm test` (14
   Vitest tests) are all clean and all enforced in CI.
 

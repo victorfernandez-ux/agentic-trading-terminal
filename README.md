@@ -73,7 +73,7 @@ npm run dev
 ## Test
 
 Backend — from `backend/`: `.\.venv\Scripts\python.exe -m pytest -q` (Windows) or
-`.venv/bin/python -m pytest -q` (Linux/macOS). **324 passing**, fully offline/mocked, ~15s:
+`.venv/bin/python -m pytest -q` (Linux/macOS). **327 passing**, fully offline/mocked, ~15s:
 health, the approval gate (double-approve race, concurrent approve-submits-exactly-once), paper-only
 fail-closed + kill switch, in-code sizing (notional cap, ATR bands, anti-pyramiding), strict order
 validation, persistence, audit log + replay + WAL fallback, streaming (WS quotes, SSE agent runs),
