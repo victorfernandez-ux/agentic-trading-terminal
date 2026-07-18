@@ -34,3 +34,16 @@ Next.js frontend (`frontend/`), SQLite by default.
 - Market/analytics endpoints take `symbol` as a **query param** (crypto `/` breaks path segments).
 - Yahoo v7/v10 endpoints (options chains, fundamentals) need the cookie+crumb dance —
   see `app/data/options_chain.py`. The v8 chart endpoint stays keyless.
+
+## gstack (recommended)
+
+This project uses [gstack](https://github.com/garrytan/gstack) for AI-assisted workflows.
+Install it for the best experience:
+
+```bash
+git clone --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack
+cd ~/.claude/skills/gstack && ./setup --team
+```
+
+Skills like /qa, /ship, /review, /investigate, and /browse become available after install.
+Use /browse for all web browsing. Use ~/.claude/skills/gstack/... for gstack file paths.
