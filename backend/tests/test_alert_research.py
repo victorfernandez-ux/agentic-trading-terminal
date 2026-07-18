@@ -113,8 +113,18 @@ async def test_cap_window_slides(proposals, monkeypatch):
     _alert(auto_research=True, trigger="every_time")
     await _fire_pass(monkeypatch)
     assert len(proposals) == 1
-    # age the recorded launch past the window; the next fire runs again
-    engine._AUTO_RUNS[0] -= engine._AUTO_WINDOW_S + 1
+    # age the recorded launch past the window (the cap is counted from the
+    # audit trail — crash-safe); the next fire runs again
+    from datetime import datetime, timedelta, timezone
+
+    from app.core.db import AuditRow, SessionLocal
+    old = (datetime.now(timezone.utc)
+           - timedelta(seconds=engine._AUTO_WINDOW_S + 60)).isoformat()
+    with SessionLocal() as s:
+        s.query(AuditRow).filter(
+            AuditRow.event == "alert.auto_research.start").update(
+            {"ts": old}, synchronize_session=False)
+        s.commit()
     store.update(store.list_alerts()[0]["id"], {"last_fired_ts": None})
     await _fire_pass(monkeypatch, price=160.0)
     assert len(proposals) == 2

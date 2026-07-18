@@ -142,9 +142,27 @@ _AUTO_TASKS: set[asyncio.Task] = set()      # keep refs so tasks aren't GC'd
 
 
 def _auto_cap_ok(now: float) -> bool:
-    while _AUTO_RUNS and now - _AUTO_RUNS[0] > _AUTO_WINDOW_S:
-        _AUTO_RUNS.popleft()
-    return len(_AUTO_RUNS) < settings.alert_auto_research_per_hour
+    """Sliding-window cap counted from the audit trail (crash-safe, H7 —
+    same pattern as the scan loop). The in-memory deque forgot launches on
+    restart, silently resetting the cap; it remains only as the fallback
+    when the DB count itself fails (cap checks never kill the evaluator).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.core.db import AuditRow, session_scope
+    try:
+        cutoff = (datetime.now(timezone.utc)
+                  - timedelta(seconds=_AUTO_WINDOW_S)).isoformat()
+        with session_scope() as s:
+            n = (s.query(AuditRow)
+                 .filter(AuditRow.event == "alert.auto_research.start",
+                         AuditRow.ts >= cutoff)
+                 .count())
+        return n < settings.alert_auto_research_per_hour
+    except Exception:  # noqa: BLE001 — fall back to the in-memory window
+        while _AUTO_RUNS and now - _AUTO_RUNS[0] > _AUTO_WINDOW_S:
+            _AUTO_RUNS.popleft()
+        return len(_AUTO_RUNS) < settings.alert_auto_research_per_hour
 
 
 async def _auto_research(alert: dict, event: dict) -> None:

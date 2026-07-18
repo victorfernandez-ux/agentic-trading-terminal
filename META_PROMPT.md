@@ -33,13 +33,13 @@ Yahoo-primary data, LLM via OpenRouter.
 
 ## Development plan (do in order; each item: tests green → commit → next)
 
-**Current cycle = the Hardening roadmap, `ROADMAP.md` Phases H1–H7** (from the July 18, 2026
-four-reviewer audit: guardrails all HOLD structurally; the gaps are the approval gate's silent-fail
-UI, LLM-call timeouts, a silent Postgres→SQLite fallback, zero frontend tests/lint, no lockfile/
-LICENSE, and docs drift). Execute H1 → H6 in order, one branch + one PR per phase (**no
-direct-to-main**), H7 as filler. Per phase: implement → tests green → gstack `/review` on the
-branch → `/qa` for UI-touching phases (H2) → PR → merge → update HANDOFF.md, tick ROADMAP.md,
-rewrite this section. Run `/cso` once after H1+H2 land.
+**The Hardening roadmap (`ROADMAP.md` Phases H1–H6) is COMPLETE** (July 18, 2026, PR #12 — see
+HANDOFF v1.18). H7 is partially done; its remaining backlog (full Analytics per-tab split,
+hex→token sweep, provider HTTP retry/backoff, dedicated api/* endpoint tests) is fair filler work
+any cycle. Working style going forward: one branch + one PR per change (**no direct-to-main**);
+per change: implement → all six CI gates green → gstack `/review` → `/qa` for UI-touching work →
+PR → merge → update HANDOFF.md, tick ROADMAP.md, rewrite this section. A standalone `/cso`
+security audit of the backend is a good next independent check.
 
 After the hardening cycle, the previous candidates remain (in suggested order): hosted-deploy
 verification end-to-end (docker compose build, API_TOKEN + CORS, Postgres, alembic — H4d clears

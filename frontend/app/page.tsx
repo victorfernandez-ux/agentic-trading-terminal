@@ -157,7 +157,9 @@ export default function Terminal() {
     analytics: <Analytics symbol={symbol} onSelect={addSymbol} watchlist={watch} />,
     news: <News symbol={symbol} />,
     alerts: <Alerts symbol={symbol} />,
-    fearGreed: <FearGreed />,
+    // Mobile wraps it in a titled panel; embedded mode would duplicate the
+    // "Fear & Greed" heading there.
+    fearGreed: <FearGreed embedded={!isMobile} />,
   };
 
   if (isMobile) {

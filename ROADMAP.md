@@ -251,6 +251,10 @@ Caveats the reviewer hit in practice, and what ATT does about them:
 ---
 
 # Hardening roadmap (v2 — from the July 18, 2026 full-repo audit) — Phases H1–H7
+# STATUS: H1–H6 COMPLETE (July 18, 2026, PR #12). H7 partially done — landed:
+# sizing.py extraction, crash-safe alert cap, FearGreed mobile heading,
+# Analytics view-typing. Remaining backlog: full Analytics per-tab split,
+# hex→token sweep, provider HTTP retry/backoff, dedicated api/* endpoint tests.
 
 **Source:** four-reviewer audit (git history/process, backend+guardrails, frontend, testing/CI/docs)
 run July 18, 2026. Headline: all three guardrails HOLD structurally with no bypass path, backend

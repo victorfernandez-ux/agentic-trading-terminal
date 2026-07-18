@@ -105,7 +105,10 @@ function useFearGreed(market: "stocks" | "crypto"): FG | null {
   return data ?? (error ? { market, error: "offline" } : null);
 }
 
-export default function FearGreed() {
+/** embedded=true (desktop): renders inside the Watchlist panel with its own
+ *  divider + title. embedded=false (mobile): the page wraps it in a panel
+ *  that already provides the title — rendering our own duplicated it. */
+export default function FearGreed({ embedded = true }: { embedded?: boolean }) {
   const [market, setMarket] = useState<"stocks" | "crypto">("stocks");
   const stocks = useFearGreed("stocks");
   const crypto = useFearGreed("crypto");
@@ -132,8 +135,8 @@ export default function FearGreed() {
   );
 
   return (
-    <div style={{ marginTop: 16, borderTop: "1px solid #1c2330", paddingTop: 12 }}>
-      <h2 className="panel-title">Fear &amp; Greed</h2>
+    <div style={embedded ? { marginTop: 16, borderTop: "1px solid #1c2330", paddingTop: 12 } : undefined}>
+      {embedded && <h2 className="panel-title">Fear &amp; Greed</h2>}
       <div
         style={{
           display: "flex",
