@@ -225,7 +225,13 @@ hook + shared types; requirements.lock (uv) + LICENSE (MIT, clean-room notices) 
 .env.example; alembic-first Docker entrypoint (create_all restricted to SQLite dev); mypy clean +
 in CI; audit JSONL WAL fallback; post-review fixes (store-level order
 validation chokepoint, legacy-volume migration stamping, portfolio-switch
-view resets). Backend tests: **327**.
+view resets). **v1.19 = post-audit security hardening** (full `/cso` scan —
+clean posture, zero findings above the daily gate): (H-1) production
+refuses to boot open — APP_ENV=production with no API_TOKEN (or wildcard
+CORS) hard-fails at startup; (H-2) the manual /agents/research|propose
+path gets the same crash-safe hourly cost cap the alert/scan loops had
+(MANUAL_RESEARCH_PER_HOUR, audit-counted, 429 past the limit). Backend
+tests: **333**.
 **Repo is PUBLIC** (github.com/victorfernandez-ux/agentic-trading-terminal) for Victor's public
 test of ATT — deliberate choice July 2, 2026; security is managed along the way (see META_PROMPT
 plan item: secret scanning + push protection + Dependabot alerts are ON; LICENSE landed in H4;
@@ -294,7 +300,7 @@ DB-backed, `positions.py`, `broker.py` paper), `api/` (health, market, agents, o
 - Approval → paper fill: order flips PENDING_APPROVAL → SUBMITTED ("filled (simulated)").
 - Positions/P&L: filled order produces a tracked position with live unrealized P&L.
 - Persistence: order written in one process is read back by a fresh interpreter (still SUBMITTED).
-- Tests: `pytest` → **327 passing** (~15s, fully offline/mocked — see README "Test" for the
+- Tests: `pytest` → **333 passing** (~15s, fully offline/mocked — see README "Test" for the
   coverage map). `ruff check .`, `mypy`, and the frontend's `npm run lint` + `npm test` (14
   Vitest tests) are all clean and all enforced in CI.
 
