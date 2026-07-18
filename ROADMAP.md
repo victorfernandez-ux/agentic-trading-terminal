@@ -247,3 +247,113 @@ Caveats the reviewer hit in practice, and what ATT does about them:
 - When adapting Vibe-Trading code (MIT): keep their copyright notice in the adapted file's header.
   Analytics remain FinceptTerminal-*clean-room* — that constraint is unchanged and separate.
 - After each phase: update `HANDOFF.md`, rewrite `META_PROMPT.md` for the next cycle, tick this file.
+
+---
+
+# Hardening roadmap (v2 — from the July 18, 2026 full-repo audit) — Phases H1–H7
+
+**Source:** four-reviewer audit (git history/process, backend+guardrails, frontend, testing/CI/docs)
+run July 18, 2026. Headline: all three guardrails HOLD structurally with no bypass path, backend
+suite 302/302 green — but the approval gate's *UI* fails silent, two backend operational landmines
+exist, and the frontend has zero tests/lint. This roadmap fixes the findings in risk order.
+
+**Workflow (every phase — uses gstack, see CLAUDE.md):** own branch → implement, tests green →
+`/review` on the branch → (phases touching frontend UX: `/qa` against the running app) → PR via
+`/ship` or manual — **no direct-to-main**. One PR per phase. Run `/cso` once after H1+H2 land as an
+independent security pass.
+
+## Phase H1 — Backend safety hotfixes (branch `fix/backend-safety-hardening`, size S)
+
+- **H1a. LLM client deadline.** Request timeout (~60s) on the OpenRouter/OpenAI client in
+  `app/agents/llm.py` (`complete_json` currently has none — a hung provider hangs the run); one
+  retry on transient network/5xx/429 (today only unparseable content retries, G2). Test: stubbed
+  hanging/failing client → typed `LLMResponseError`, never a hang.
+- **H1b. Gate the silent SQLite fallback.** `db.py:_make_engine` silently falls back
+  Postgres→SQLite on ping failure — in production that reads as "all data vanished". Allow only
+  when `app_env` != production; otherwise fail loudly at startup. Test both branches.
+- **H1c. Strict order input validation.** `api/orders.py:OrderProposal`: `side` →
+  `Literal["buy","sell"]`, `qty` → `Field(gt=0)`, `order_type` → `Literal`. Tests: qty 0/negative,
+  bad side → 422 (today they enter PENDING_APPROVAL and corrupt positions math).
+- **H1d. `require_human_approval` honesty.** The flag is decorative (read only by `/health`).
+  Startup assertion it is True — no runtime toggle illusion. Keep `/health` reporting.
+- **H1e. Constant-time token compare.** `main.py` auth middleware `==` → `secrets.compare_digest`.
+
+## Phase H2 — ApprovalQueue: informed, fail-loud human gate (branch `fix/approval-queue-hardening`, size M)
+
+The backend gate is airtight; the UI in front of it is not.
+- **H2a. Fail loud.** `ApprovalQueue.act()` ignores `r.ok` and has no catch — 409/500/network all
+  look like success. Check status, catch, render inline per-card error; on 409 refresh to the
+  order's real status.
+- **H2b. Live queue.** Poll ~10s (Positions pattern) so orders resolved via Telegram/MCP/other tab
+  disappear; never render Approve for non-PENDING_APPROVAL.
+- **H2c. Informed approval.** Render `est_price` (typed but never shown), order age, and the
+  proposing run's rationale — backend: include thesis summary / `run_id` in the order payload.
+- **H2d. Confirm affordance.** Two-step approve ("Confirm BUY 3 NVDA ~$1,500?").
+- `/qa` the flow end-to-end after landing (approve, reject, forced 409, network-off).
+
+## Phase H3 — Frontend quality infrastructure (branch `chore/frontend-testing-lint`, size M)
+
+- **H3a. ESLint for real.** Flat config (typescript-eslint + react-hooks); the repo already carries
+  `eslint-disable` comments for a linter that isn't installed. Fix violations; `npm run lint` in CI.
+- **H3b. Vitest + Testing Library.** First targets pin the safety path: ApprovalQueue (success,
+  409, network failure, double-click lockout, stale refresh) and `lib/api.ts` (401 event, tickets).
+  CI job.
+- **H3c. Shared `usePolledFetch` hook.** Replaces six hand-rolled useEffect+setInterval copies and
+  the silent `.catch(() => setX([]))` pattern; unified loading/error states.
+- **H3d. Shared API types.** `lib/types.ts` (or OpenAPI-generated) — components currently redeclare
+  response shapes per-file, so FE/BE drift is invisible.
+
+## Phase H4 — Reproducibility, legal, deploy correctness (branch `chore/repro-license-deploy`, size S–M)
+
+- **H4a. Backend lockfile.** `uv` (or pip-tools) lock committed; CI installs from it. Today's
+  floating `>=` bounds are not reproducible.
+- **H4b. LICENSE + provenance.** Add LICENSE (MIT per PROJECT_PLAN intent) — docs discuss AGPL
+  obligations but no LICENSE file exists. One-time review of `f1fa10c` ("adapted from
+  FinceptTerminal's feature set") to confirm clean-room; attribution note in README.
+- **H4c. `.env.example` completeness.** Add the knobs the code reads but the example omits:
+  `API_TOKEN`, `CORS_ORIGINS`, `KILL_SWITCH_FILE`, `RUNS_DIR`, `TELEGRAM_*`,
+  `SCAN_AUTO_RESEARCH_PER_HOUR`, `REFLECTIONS_LIMIT`.
+- **H4d. Migrations as source of truth.** Docker entrypoint runs `alembic upgrade head` before
+  uvicorn; `create_all` + `_ensure_schema_upgrades` restricted to SQLite dev so the two schema
+  paths can't diverge.
+
+## Phase H5 — Typecheck + CI completion (branch `chore/mypy-ci`, size S–M)
+
+- **H5a. mypy enforced.** `[tool.mypy]` config, fix the 52 current errors (`agents/graph.py` first
+  — it's the sizing engine), CI step. mypy is a declared dev dep that never runs.
+- **H5b. Durable audit fallback.** `audit.py` swallows DB-write failures — an approval's audit row
+  can be lost. Append to a local JSONL WAL on DB failure; test by breaking the session.
+- **H5c. (Optional)** `pip-audit` / `npm audit` as non-blocking CI steps.
+
+## Phase H6 — Docs truth pass (branch `docs/sync-and-cross-platform`, size S)
+
+- **H6a.** Fix contradictory test counts (README 185 / HANDOFF "5 passing" / META 299 → actual);
+  refresh HANDOFF "Verified working".
+- **H6b.** Document `backend/run-dev.sh`; Linux/macOS commands alongside Windows in
+  README/HANDOFF/CLAUDE.md (README's `.venv\Scripts` paths dead-end non-Windows devs).
+- **H6c.** Record the lockfile policy and the "CSS tokens, never hex literals" rule.
+
+## Phase H7 — Maintainability backlog (continuous, no urgency)
+
+Split `Analytics.tsx` (658 lines, `any`-typed island) per-tab with real types · sweep hardcoded hex
+into `globals.css` tokens · extract `_build_order` → `agents/sizing.py` · make the alert
+auto-research cap crash-safe like the scan loop's · provider HTTP retry/backoff · dedicated tests
+for `api/market|research|memory|agents` + `positions.py` P&L · duplicate "Fear & Greed" mobile
+heading · document the build-time-only `BACKEND_URL` rewrite footgun.
+
+## Sequencing
+
+| Order | Phase | Depends on | Size | gstack gates |
+|---|---|---|---|---|
+| 1 | H1 backend safety | — | S | `/review` |
+| 2 | H2 approval-gate UI | H2c backend bit | M | `/review` + `/qa` |
+| 3 | H3 frontend infra | H2 (tests pin it) | M | `/review` |
+| 4 | H4 repro/legal/deploy | — | S–M | `/review` |
+| 5 | H5 mypy + CI + audit WAL | — | S–M | `/review` |
+| 6 | H6 docs truth | H1–H5 (counts settle) | S | `/review` |
+| — | H7 backlog | continuous | S each | `/review` |
+| — | `/cso` security pass | after H1+H2 | — | — |
+
+Guardrails unchanged and restated: no autonomous money movement; paper only; sizing in code;
+secrets out of git; FinceptTerminal clean-room. After each phase: update `HANDOFF.md`, rewrite
+`META_PROMPT.md`, tick this file.
