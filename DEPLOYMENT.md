@@ -56,17 +56,33 @@ redeploy — they're compiled into the build, not read at runtime.
 
 ## 3. Domain
 
-- **Free (recommended):** the `*.vercel.app` subdomain you got in step 2.
+- **Zero-setup free:** the `*.vercel.app` subdomain you got in step 2.
   Rename the Vercel project to pick the word before `.vercel.app`. HTTPS
-  included, zero setup.
-- **Actually-free custom domains no longer really exist** — Freenom (.tk
-  etc.) shut down. Community free subdomains like https://is-a.dev (yields
-  `you.is-a.dev` via a GitHub PR) work with Vercel if you want something
-  less branded.
-- **Nearly free:** a `.xyz`/`.site` domain is $1–3/yr at Porkbun or
-  Cloudflare Registrar. Add it under Vercel → Project → Settings → Domains,
-  set the two DNS records Vercel shows you, and add the new origin to
-  `CORS_ORIGINS` on Render.
+  included, nothing to configure.
+- **Free custom domain — DigitalPlat FreeDomain**
+  (https://github.com/DigitalPlatDev/FreeDomain): free registration of
+  `yourname.dpdns.org` / `.us.kg` / `.qzz.io` / `.xx.kg` / `.qd.je`.
+  DigitalPlat doesn't host DNS records itself — you point the domain at
+  custom nameservers, so pair it with a free Cloudflare DNS zone:
+  1. Register at https://dash.domain.digitalplat.org/ (account +
+     identity/GitHub verification; see their tutorial in the repo).
+  2. Add the domain as a site on https://dash.cloudflare.com (Free plan);
+     Cloudflare assigns you two nameservers.
+  3. In the DigitalPlat dashboard, set the domain's nameservers to those
+     two Cloudflare nameservers.
+  4. In Vercel → Project → Settings → Domains, add the domain; Vercel shows
+     the record it wants — create it in Cloudflare (CNAME →
+     `cname.vercel-dns.com`, **DNS-only / grey cloud**, not proxied, so
+     Vercel can issue its TLS cert).
+  5. Update `CORS_ORIGINS` and `PUBLIC_BASE_URL` on Render to the new
+     origin (e.g. `https://yourname.dpdns.org`).
+  Caveat: it's a registrar-style free service run by a community project —
+  fine for a personal terminal, but don't hang anything business-critical
+  on it, and note their renewal rules so the domain doesn't lapse.
+- **Nearly free, most robust:** a `.xyz`/`.site` domain is $1–3/yr at
+  Porkbun or Cloudflare Registrar; same Vercel + DNS steps as above.
+- Other community options: https://is-a.dev gives `you.is-a.dev` via a
+  GitHub PR and also works with Vercel.
 
 ## Security checklist before sharing the URL
 
