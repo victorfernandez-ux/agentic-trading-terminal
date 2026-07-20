@@ -1,0 +1,38 @@
+# Render blueprint (https://render.com/docs/blueprint-spec) — backend only.
+# Vercel hosts the Next.js frontend (see DEPLOYMENT.md); the FastAPI backend
+# lives here because Vercel's serverless functions can't hold the /ws/quotes
+# WebSocket or a long-running process with local state.
+#
+# Free-plan caveats: the service spins down after ~15 min idle (next request
+# waits ~1 min for cold start) and has NO persistent disk — the default
+# SQLite file under /data resets on every deploy/restart. For state that
+# survives, set DATABASE_URL to a free hosted Postgres (Neon or Supabase).
+services:
+  - type: web
+    name: att-backend
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      # Auth for every endpoint except /health and /. Render generates the
+      # value; paste it into the UI's token gate to sign in.
+      - key: API_TOKEN
+        generateValue: true
+      # Your frontend origin, e.g. https://<app>.vercel.app — required or the
+      # browser UI's writes get 403'd by the CORS/CSRF guard.
+      - key: CORS_ORIGINS
+        sync: false
+      # Same origin; used for links in notifications.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      # postgresql+psycopg://... from Neon/Supabase, or leave the image's
+      # SQLite default (sqlite:////data/terminal.db) for an ephemeral demo.
+      - key: DATABASE_URL
+        sync: false
+      # LLM access for the agent graph (or set ANTHROPIC_/OPENAI_ instead
+      # and switch LLM_PROVIDER accordingly).
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO

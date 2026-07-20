@@ -12,6 +12,11 @@ RUN pip install --no-cache-dir --prefix=/install .
 
 FROM python:3.11-slim
 RUN useradd --system --uid 10001 --create-home att
+# /data is the state mountpoint. Compose mounts a volume over it; creating it
+# att-owned in the image lets volume-less hosts (e.g. Render's free tier,
+# which has no persistent disk) boot the container too — state is ephemeral
+# there, so point DATABASE_URL at hosted Postgres for anything that must last.
+RUN mkdir -p /data && chown att:att /data
 WORKDIR /srv
 COPY --from=builder /install /usr/local
 COPY app ./app
